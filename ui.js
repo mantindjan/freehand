@@ -23,8 +23,11 @@ import { DRILLS } from './drills.js';
     return { x0, y0, x1, y1, w, h, cx: x0 + w / 2, cy: y0 + h / 2, U: Math.min(w, h) };
   }
   function layout() { S.geo = S.drill.lay(S.spec, area()); }
-  function newPrompt() {
-    S.spec = S.drill.spec(optsOf(S.drill), S.spec); S.strokes = []; S.result = null;
+  // keep = true is a set-up change: the prompt is rebuilt for the new options but the drawing stays.
+  // Only Clear, Again, Next and leaving the exercise wipe the sheet; a stray tap on an option
+  // must never cost the boss his drawing. Any result is dropped, since it described the old prompt.
+  function newPrompt(keep) {
+    S.spec = S.drill.spec(optsOf(S.drill), S.spec, !!keep); if (!keep) S.strokes = []; S.result = null;
     taskEl.textContent = S.drill.task(S.spec); layout(); render(); renderPanel(); buttons();
   }
 
@@ -115,7 +118,7 @@ import { DRILLS } from './drills.js';
     $('again').hidden = !done || !!S.drill.free; $('undo').disabled = !S.strokes.length; $('clear').disabled = !S.strokes.length && !done;
     $('tally').textContent = session.n ? `This sitting: ${session.n} checked, average ${Math.round(session.sum / session.n)}` : 'This sitting: nothing checked yet';
   }
-  $('go').addEventListener('click', () => { if (S.drill.reference) return; if (S.result) return newPrompt(); if (!finals().length) return; $('go').textContent = 'Reading…'; $('go').disabled = true; setTimeout(check, 30); });
+  $('go').addEventListener('click', () => { if (S.drill.reference) return; if (S.result) return newPrompt(false); if (!finals().length) return; $('go').textContent = 'Reading…'; $('go').disabled = true; setTimeout(check, 30); });
   $('again').addEventListener('click', () => { S.strokes = []; S.result = null; render(); renderPanel(); buttons(); });
   $('clear').addEventListener('click', () => { S.strokes = []; S.result = null; render(); renderPanel(); buttons(); });
   $('undo').addEventListener('click', () => {
@@ -123,6 +126,10 @@ import { DRILLS } from './drills.js';
     render(); renderPanel(); buttons();
   });
   for (const b of document.querySelectorAll('[data-tool]')) b.addEventListener('click', () => setTool(b.dataset.tool));
+  // Safari ignores user-scalable=no in a normal tab, so pinch zoom is also refused here: its own
+  // gesture events, and any touch move with two fingers down.
+  for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, e => e.preventDefault());
+  document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
   document.addEventListener('keydown', e => { if (e.key === 'Enter') $('go').click(); else if (e.key === 'z' || e.key === 'Backspace') $('undo').click(); });
 
   const tier = s => s >= 80 ? 'good' : s >= 55 ? 'warn' : 'bad';
@@ -143,7 +150,7 @@ import { DRILLS } from './drills.js';
   }
   panel.addEventListener('click', e => {
     const b = e.target.closest('button[data-k]'); if (!b) return;
-    const k = grp(S.drill); saved.opts[k] = saved.opts[k] || {}; saved.opts[k][b.dataset.k] = b.dataset.v; save(); newPrompt();
+    const k = grp(S.drill); saved.opts[k] = saved.opts[k] || {}; saved.opts[k][b.dataset.k] = b.dataset.v; save(); newPrompt(true);
   });
 
   function renderNav() {

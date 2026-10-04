@@ -415,9 +415,10 @@ export const DRILLS = (function () {
       { key: 'cam', label: 'Camera, from above (row)', def: 'all', choices: [['all', 'All']].concat(CAMS.map(c => [String(c), camLabel(c)])) },
       { key: 'model', label: 'Small picture', def: 'show', choices: [['show', 'Shown'], ['hide', 'From memory']] }],
     // Steps to the cell after the previous one within the chosen column and row. With both chosen
-    // the list is one cube, which then repeats.
-    spec(o, prev) {
-      const list = CELLS.filter(c => (o.turn === 'all' || c.turn === +o.turn) && (o.cam === 'all' || c.cam === +o.cam)), at = prev ? list.findIndex(c => c.turn === prev.turn && c.cam === prev.cam) : -1, n = (at + 1) % list.length;
+    // the list is one cube, which then repeats. On a set-up change (stay) the current cube is kept
+    // if it is still among the chosen ones, so switching the picture on or off does not move on.
+    spec(o, prev, stay) {
+      const list = CELLS.filter(c => (o.turn === 'all' || c.turn === +o.turn) && (o.cam === 'all' || c.cam === +o.cam)), at = prev ? list.findIndex(c => c.turn === prev.turn && c.cam === prev.cam) : -1, n = stay && at >= 0 ? at : (at + 1) % list.length;
       return { turn: list[n].turn, cam: list[n].cam, below: false, dist: 'avg', n: n + 1, total: list.length, show: o.model !== 'hide' };
     },
     lay(s, A) { const m = poseOf(s), sc = 0.2 * A.U; return { m, show: s.show, tf: v => ({ x: A.x1 - 0.85 * sc + sc * v.x, y: A.y0 + 0.9 * sc + sc * v.y }) }; }, // the picture, top right

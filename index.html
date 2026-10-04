@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>FreeHand</title>
 <!-- Added to the Home Screen, the page opens full screen without Safari's bars (docs/tooling.md, "Full screen"). -->
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -40,7 +40,9 @@
   --ink: #f1f4ea; --sketch: #c3a9ff; --blue: #7ec3ee; --red: #ff7f96; --chip: #20392f; --chip-on: #ecf1e9; --chip-on-fg: #142823;
   --good: #71d49b; --warn: #efc162; --bad: #ff8d80; color-scheme: dark }
 
-html, body { height: 100%; }
+/* No zooming anywhere: a pinch or double tap while drawing kept zooming the page. touch-action: none
+   refuses both; the side panel alone may still scroll up and down. */
+html, body { height: 100%; touch-action: none; }
 body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--ui); font-size: 15px; line-height: 1.4; overflow: hidden;
   -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
@@ -85,7 +87,7 @@ button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .pens [data-tool="final"][aria-pressed="true"] .sw { background: var(--chip-on-fg); }
 .tools .primary { background: var(--chip-on); color: var(--chip-on-fg); border-color: var(--chip-on); min-width: 112px; }
 
-.panel { min-height: 0; min-width: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+.panel { min-height: 0; min-width: 0; overflow-y: auto; touch-action: pan-y; display: flex; flex-direction: column; gap: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
 .panel h3 { margin: 0 0 8px; font-family: var(--mono); font-weight: 500; font-size: 11px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
 .opt { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
 .opt:last-child { margin-bottom: 0; }
