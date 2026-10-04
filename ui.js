@@ -179,12 +179,14 @@ import { DEFAULT_REPO, syncConfig, setSyncConfig, syncState, sync } from './sync
   document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
   document.addEventListener('keydown', e => { if (box.open) return; if (e.key === 'Enter') $('go').click(); else if (e.key === 'z' || e.key === 'Backspace') $('undo').click(); });
 
-  const tier = s => s >= 80 ? 'good' : s >= 55 ? 'warn' : 'bad';
+  // Four bands. Good is a pass, not a warning, so it is not drawn in amber; nothing is drawn in red.
+  const BANDS = [[90, 'top', 'Outstanding'], [75, 'good', 'Excellent'], [50, 'ok', 'Good'], [0, 'warn', 'Improve']];
+  const band = s => BANDS.find(b => s >= b[0]), tier = s => band(s)[1];
   function renderPanel() {
     const d = S.drill, o = optsOf(d), r = S.result; let h = '';
     if (r) {
       h += '<section class="res"><h3>Marking</h3><div class="res-top">';
-      if (r.score != null) h += `<div class="score ${tier(r.score)}">${r.score}<small>of 100</small></div>`;
+      if (r.score != null) h += `<div class="score ${tier(r.score)}">${r.score}<small>${band(r.score)[2]}</small></div>`;
       h += `<div><h2>${esc(r.title)}</h2>${r.sub ? `<p class="sub">${esc(r.sub)}</p>` : ''}</div></div>`;
       if (r.rows.length) h += '<dl class="rows">' + r.rows.map(x => `<div class="row ${x.s || ''}"><span class="mark"></span><dt>${esc(x.k)}</dt><dd>${esc(x.v)}</dd></div>`).join('') + '</dl>';
       if (r.notes.length) h += '<ul class="notes">' + r.notes.map(n => `<li>${esc(n)}</li>`).join('') + '</ul>';

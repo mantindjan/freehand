@@ -7,7 +7,14 @@ export const DRILLS = (function () {
   const pick = a => a[Math.floor(Math.random() * a.length)];
   const rand = (a, b) => a + Math.random() * (b - a);
   const pct = (v, d) => (v * 100).toFixed(d == null ? 0 : d) + '%';
-  const st = (v, good, warn) => Math.abs(v) <= good ? 'good' : Math.abs(v) <= warn ? 'warn' : 'bad';
+  /* Calibration (2026-10-04, docs/how-it-works.md "Scoring"). The first scales were guesses and far
+     too strict: a mark 2% off scored 50. SCALE is the error that scores 50, the bottom of "Good";
+     Excellent (75) is 0.58 of it and Outstanding (90) a third of it. The per-row thresholds written
+     next to each row were set on the old scales, so st() widens them all by ROW_EASE; the combined
+     scores (several errors averaged) are widened by MIX_EASE. */
+  const SCALE = { divide: 0.05, ratio: 0.08, clock: 6, wobble: 0.04, ellTop: 0.07, cube: 0.10 };
+  const ROW_EASE = 1.6, MIX_EASE = 1.5;
+  const st = (v, good, warn) => Math.abs(v) <= good * ROW_EASE ? 'good' : Math.abs(v) <= warn * ROW_EASE ? 'warn' : 'bad';
   const sgn = v => (v >= 0 ? '+' : '−') + Math.abs(v);
   const longest = strokes => { let b = null; for (const s of strokes) { const l = FH.strokeLine(s); if (l && (!b || l.len > b.len)) b = l; } return b; };
   const need = msg => ({ score: null, title: msg, rows: [], notes: [] });
@@ -77,7 +84,7 @@ export const DRILLS = (function () {
       const cuts = [0, ...marks, 1], parts = []; for (let i = 1; i < cuts.length; i++) parts.push((cuts[i] - cuts[i - 1]) * 100);
       const rows = errs.map((e, i) => ({ k: s.n === 2 ? 'Middle' : `Mark ${i + 1}`, v: Math.abs(e) < 0.004 ? 'on the spot' : `${pct(Math.abs(e), 1)} too far ${e > 0 ? dir[0] : dir[1]}`, s: st(e, 0.015, 0.03) }));
       rows.push({ k: 'Parts', v: parts.map(p => p.toFixed(0)).join(' · ') + ` (true ${(100 / s.n).toFixed(1)} each)` });
-      return { score: score(rms / 0.02), title: `Average miss ${pct(errs.reduce((a, e) => a + Math.abs(e), 0) / errs.length, 1)} of the line`,
+      return { score: score(rms / SCALE.divide), title: `Average miss ${pct(errs.reduce((a, e) => a + Math.abs(e), 0) / errs.length, 1)} of the line`,
         sub: `Largest part is ${(Math.max(...parts) / Math.min(...parts)).toFixed(2)} times the smallest.`, rows, notes: [], overlay };
     }
   };
@@ -96,7 +103,7 @@ export const DRILLS = (function () {
       const l = longest(strokes); if (!l || l.len < 10) return need('No line found');
       const f = +s.f, r = l.len / G.L, e = r / f - 1, ux = (l.b.x - l.a.x) / l.len, uy = (l.b.y - l.a.y) / l.len;
       const end = { x: l.a.x + ux * G.L * f, y: l.a.y + uy * G.L * f };
-      return { score: score(e / 0.07), title: Math.abs(e) < 0.01 ? 'Right length' : `${pct(Math.abs(e), 0)} too ${e > 0 ? 'long' : 'short'}`,
+      return { score: score(e / SCALE.ratio), title: Math.abs(e) < 0.01 ? 'Right length' : `${pct(Math.abs(e), 0)} too ${e > 0 ? 'long' : 'short'}`,
         sub: 'The red tick is where the line should end, measured from where you started.',
         rows: [{ k: 'You drew', v: r.toFixed(2) + ' of the blue line', s: st(e, 0.03, 0.08) }, { k: 'Asked', v: f.toFixed(2) }], notes: [],
         overlay: (g, C) => { D.line(g, { x: l.a.x - uy * 10, y: l.a.y + ux * 10 }, { x: end.x - uy * 10, y: end.y + ux * 10 }, C.red, 2); D.line(g, { x: end.x - uy * 22, y: end.y + ux * 22 }, { x: end.x + uy * 22, y: end.y - ux * 22 }, C.red, 2); } };
@@ -117,7 +124,7 @@ export const DRILLS = (function () {
       const l = longest(strokes); if (!l || l.len < 15) return need('No line found');
       const from = dist(l.a, G.c) <= dist(l.b, G.c) ? l.a : l.b, to = from === l.a ? l.b : l.a;
       const deg = clockDeg(sub(to, from)), d = angDiff(deg, s.h * 30), T = s.h * 30 * DEG;
-      return { score: score(d / 5), title: Math.abs(d) < 1 ? 'On target' : `${Math.abs(d).toFixed(0)}° ${d > 0 ? 'clockwise' : 'anticlockwise'} of target`,
+      return { score: score(d / SCALE.clock), title: Math.abs(d) < 1 ? 'On target' : `${Math.abs(d).toFixed(0)}° ${d > 0 ? 'clockwise' : 'anticlockwise'} of target`,
         sub: `You drew ${clockText(deg)}. The red line is ${clockText(s.h * 30)}.`,
         rows: [{ k: 'You drew', v: clockText(deg), s: st(d, 2.5, 6) }, { k: 'Asked', v: clockText(s.h * 30) }], notes: [],
         overlay: (g, C) => { const R = Math.max(l.len, 60);
@@ -199,7 +206,7 @@ export const DRILLS = (function () {
       const tn = FH.tableNames(45, e.degree), tilt = e.ang / DEG;
       const rows = [{ k: 'Degree', v: `${e.degree.toFixed(0)}°: short axis is ${(e.b / e.a).toFixed(2)} of the long one` },
         { k: 'Tilt', v: e.b / e.a > 0.93 ? 'nearly a circle, no tilt to speak of' : Math.abs(tilt) < 1.5 ? 'long axis level' : `long axis ${Math.abs(tilt).toFixed(0)}° from level, ${tilt > 0 ? 'right end down' : 'right end up'}` }].concat(shapeRows(e));
-      return { score: score(e.rms / 0.025), title: `A ${e.degree.toFixed(0)}° ellipse`,
+      return { score: score(e.rms / SCALE.wobble), title: `A ${e.degree.toFixed(0)}° ellipse`,
         sub: `A circle seen from ${e.degree.toFixed(0)}° above its plane. Nearest row of the cube table: camera ${tn.pitch}°.`, rows, notes: [], overlay: (g, C) => drawFit(g, e, C.red, true) };
     }
   };
@@ -224,7 +231,7 @@ export const DRILLS = (function () {
         { k: 'Length', v: Math.abs(dw) < 0.015 ? 'right' : `${pct(Math.abs(dw))} too ${dw > 0 ? 'long' : 'short'}`, s: st(dw, 0.03, 0.07) },
         { k: 'Thickness', v: Math.abs(dh) < 0.02 ? 'right' : `${pct(Math.abs(dh))} too ${dh > 0 ? 'fat' : 'thin'}`, s: st(dh, 0.04, 0.09) }];
       if (!round) rows.push({ k: 'Tilt', v: Math.abs(tilt) < 1.5 ? 'lined up with the box' : `${Math.abs(tilt).toFixed(0)}° ${tilt > 0 ? 'clockwise' : 'anticlockwise'} of the box`, s: st(tilt, 2.5, 6) });
-      return { score: score(Math.sqrt(terms.reduce((a, b) => a + b, 0) / terms.length)), title: 'Against the true ellipse', sub: 'The red ellipse touches each side at its middle.', rows: rows.concat(shapeRows(e).slice(0, 2)), notes: [], overlay: (g, C) => drawFit(g, T, C.red, false) };
+      return { score: score(Math.sqrt(terms.reduce((a, b) => a + b, 0) / terms.length) / MIX_EASE), title: 'Against the true ellipse', sub: 'The red ellipse touches each side at its middle.', rows: rows.concat(shapeRows(e).slice(0, 2)), notes: [], overlay: (g, C) => drawFit(g, T, C.red, false) };
     }
   };
 
@@ -280,7 +287,7 @@ export const DRILLS = (function () {
       let miss = 0; for (const q of e.pts) miss += Math.abs(FH.ellipseDist(T, q)); miss /= e.pts.length * T.a;
       let lean = angDiff(e.ang / DEG, T.ang / DEG); if (lean > 90) lean -= 180; if (lean < -90) lean += 180;
       const dd = e.degree - T.degree, touch = [[0.5, 0], [1, 0.5], [0.5, 1], [0, 0.5]].map(q => tf(G.m.project(q[0], q[1], 1)));
-      return { score: score(miss / 0.045), title: `Average miss ${pct(miss, 1)} of the half-width`, sub: 'Red dots are the four touching points: the middle of each side in perspective, so the far ones sit closer together.',
+      return { score: score(miss / SCALE.ellTop), title: `Average miss ${pct(miss, 1)} of the half-width`, sub: 'Red dots are the four touching points: the middle of each side in perspective, so the far ones sit closer together.',
         rows: [{ k: 'Degree', v: `yours ${e.degree.toFixed(0)}°, true ${T.degree.toFixed(0)}°` + (Math.abs(dd) < 3 ? '' : dd > 0 ? ': too open' : ': too flat'), s: st(dd, 3, 7) },
           { k: 'Short axis', v: Math.abs(lean) < 2 ? 'lined up with the uprights' : `leans ${Math.abs(lean).toFixed(0)}° ${lean > 0 ? 'clockwise' : 'anticlockwise'} of true; it should run with the uprights`, s: st(lean, 3, 7) }].concat(shapeRows(e).slice(0, 2)),
         notes: [], overlay: (g, C) => { drawFit(g, T, C.red, true); for (const p of touch) D.dot(g, p, 3.5, C.red); } };
@@ -310,7 +317,7 @@ export const DRILLS = (function () {
         { k: 'Width', v: Math.abs(dw) < 0.015 ? 'on the marks' : `${pct(Math.abs(dw))} too ${dw > 0 ? 'wide' : 'narrow'}`, s: st(dw, 0.03, 0.07) },
         { k: 'Centre', v: c < 0.02 ? 'centred' : `${pct(c)} of the half-width off`, s: st(c, 0.03, 0.07) }];
       if (s.deg < 65) rows.push({ k: 'Tilt', v: Math.abs(tilt) < 1.5 ? 'short axis on the line' : `short axis ${Math.abs(tilt).toFixed(0)}° ${tilt > 0 ? 'clockwise' : 'anticlockwise'} of the line`, s: st(tilt, 2.5, 6) });
-      return { score: score(Math.sqrt(terms.reduce((a, b) => a + b, 0) / terms.length)), title: Math.abs(dd) < 3 ? 'Right degree' : `${Math.abs(dd).toFixed(0)}° too ${dd > 0 ? 'open' : 'flat'}`, sub: '', rows: rows.concat(shapeRows(e).slice(0, 2)), notes: [], overlay: (g, C) => drawFit(g, { cx: G.cx, cy: G.cy, a: G.a, b: G.b, ang: G.ang }, C.red, false) };
+      return { score: score(Math.sqrt(terms.reduce((a, b) => a + b, 0) / terms.length) / MIX_EASE), title: Math.abs(dd) < 3 ? 'Right degree' : `${Math.abs(dd).toFixed(0)}° too ${dd > 0 ? 'open' : 'flat'}`, sub: '', rows: rows.concat(shapeRows(e).slice(0, 2)), notes: [], overlay: (g, C) => drawFit(g, { cx: G.cx, cy: G.cy, a: G.a, b: G.b, ang: G.ang }, C.red, false) };
     }
   };
 
@@ -362,7 +369,7 @@ export const DRILLS = (function () {
         terms.push((d / 6) ** 2, (dl / 0.1) ** 2); meas[nm.toLowerCase() + 'Deg'] = ud; meas[nm.toLowerCase() + 'Len'] = ul;
       }
       const fy = FH.fitY(meas, model.k, s.below ? -1 : 1), k = sl / ms;
-      return { score: score(Math.sqrt(terms.reduce((a, b) => a + b, 0) / terms.length)), title: `You drew a cube ${viewText(fy.turn, fy.pitch)}`, sub: `Asked: turned ${s.turn}°, ${camText(s)}. The red Y is the true one at your stem length.`, rows, notes: [],
+      return { score: score(Math.sqrt(terms.reduce((a, b) => a + b, 0) / terms.length) / MIX_EASE), title: `You drew a cube ${viewText(fy.turn, fy.pitch)}`, sub: `Asked: turned ${s.turn}°, ${camText(s)}. The red Y is the true one at your stem length.`, rows, notes: [],
         overlay: (g, C) => { for (const v of [my.stem, my.left, my.right]) D.line(g, J, { x: J.x + v.x * k, y: J.y + v.y * k }, C.red, 2); D.dot(g, J, 3, C.red); } };
     }
   };
@@ -383,7 +390,7 @@ export const DRILLS = (function () {
       if (missing.length) rows.push({ k: 'Not found', v: missing.join('; '), s: 'bad' });
       const lines = rep.map(r => ({ edge: r.edge, ua: r.ua, ub: r.ub })).concat(G.m.edges.filter(e => e.isY).map(e => ({ edge: e, ua: al.P[e.a], ub: al.P[e.b] })));
       const checks = FH.familyChecks(lines, G.m), hc = hiddenCheck(rep, G.P.sc); if (hc) checks.push(hc);
-      return { score: Math.round(score(miss / 0.07) * al.pairs.length / E.length), title: `Corners miss by ${pct(miss)} of an edge on average`, sub: 'The red cube is the true one on this Y. Draw over it to feel the correction.', rows: rows.concat(checks), notes: [],
+      return { score: Math.round(score(miss / SCALE.cube) * al.pairs.length / E.length), title: `Corners miss by ${pct(miss)} of an edge on average`, sub: 'The red cube is the true one on this Y. Draw over it to feel the correction.', rows: rows.concat(checks), notes: [],
         overlay: (g, C) => drawCube(g, al, C.red, false) };
     }
   };
@@ -404,7 +411,7 @@ export const DRILLS = (function () {
       rows.push({ k: 'Camera', v: `drew ${Math.abs(b.pitch).toFixed(0)}°, asked ${s.cam ? s.cam + '°' : 'level'}` + (Math.abs(dp) < 4 ? '' : dp > 0 ? `: ${face} face too open` : `: ${face} face too flat`), s: st(dp, 5, 11) });
       rows.push({ k: 'Distance', v: `reads as ${dw.text}; asked ${DW[s.dist]}` }); }
     const checks = FH.familyChecks(rep.map(r => ({ edge: r.edge, ua: r.ua, ub: r.ub })), m), hc = hiddenCheck(rep, al.sc); if (hc) checks.push(hc);
-    return { score: Math.round(score(miss / 0.08) * al.pairs.length / al.E.length), title: R ? `You drew a cube ${viewText(R.best.model.turn, R.best.model.pitch)}` : 'Against the cube asked for',
+    return { score: Math.round(score(miss / SCALE.cube) * al.pairs.length / al.E.length), title: R ? `You drew a cube ${viewText(R.best.model.turn, R.best.model.pitch)}` : 'Against the cube asked for',
       sub: `Against the cube asked for, corners miss by ${pct(miss)} of an edge on average. It is shown in red.`, rows: rows.concat(edgeRows(rep, 3), checks), notes: [],
       overlay: (g, C) => {
         if (faceOn && s.turn) { // both cubes share a centre, so the alignment of the true cube places the face-on one too
@@ -484,7 +491,7 @@ export const DRILLS = (function () {
       if (R.alt) notes.push(`With hidden edges drawn this far away, it reads just as well as a cube ${viewText(R.alt.model.turn, R.alt.model.pitch)}.`);
       if (al.unSegs) notes.push(`${al.unSegs} stroke${al.unSegs > 1 ? 's were' : ' was'} not used.`);
       if (al.unEdges) notes.push(`${al.unEdges} edge${al.unEdges > 1 ? 's' : ''} of the cube had no stroke.`);
-      return { score: Math.round(score(miss / 0.07) * al.pairs.length / al.E.length), title: `Best match: cube ${viewText(b.turn, b.pitch)}`, sub: `${dw.text[0].toUpperCase() + dw.text.slice(1)}. The red cube is the nearest true one.`, rows: rows.concat(edgeRows(rep, 3), checks), notes,
+      return { score: Math.round(score(miss / SCALE.cube) * al.pairs.length / al.E.length), title: `Best match: cube ${viewText(b.turn, b.pitch)}`, sub: `${dw.text[0].toUpperCase() + dw.text.slice(1)}. The red cube is the nearest true one.`, rows: rows.concat(edgeRows(rep, 3), checks), notes,
         overlay: (g, C) => drawCube(g, al, C.red, true) };
     }
   };
