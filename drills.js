@@ -212,7 +212,7 @@ export const DRILLS = (function () {
       { key: 'axis', label: 'Short axis', def: 'upright', choices: [['upright', 'Upright'], ['tilted', 'Tilted']] }],
     spec(o) { return { deg: o.deg === 'r' ? pick([15, 22.5, 30, 45, 60, 67.5]) : +o.deg, ang: o.axis === 'upright' ? 0 : pick([-40, -25, -12, 12, 25, 40]), w: rand(0.3, 0.4) }; },
     lay(s, A) { const a = s.w * A.U; return { cx: A.cx, cy: A.cy, a, b: a * Math.sin(s.deg * DEG), ang: s.ang * DEG }; },
-    task(s) { return `Draw a ${s.deg}° ellipse between the two end marks: a circle seen from ${s.deg}° above. Its short axis lies on the long blue line.`; },
+    task(s) { return `Draw a ${s.deg}° ellipse between the two end marks, short axis on the long blue line.`; },
     draw(g, G, C) {
       const c = Math.cos(G.ang), s = Math.sin(G.ang), ctr = { x: G.cx, y: G.cy };
       D.line(g, { x: G.cx + s * G.a, y: G.cy - c * G.a }, { x: G.cx - s * G.a, y: G.cy + c * G.a }, C.blue, 1.5);
@@ -256,7 +256,9 @@ export const DRILLS = (function () {
   const cubeSpec = specFor(TURNS), ySpec = specFor(TURNS.slice(1));
   const poseOf = s => FH.cubeModel(s.turn, s.below ? -s.cam : s.cam, KS[s.dist]);
   const camText = s => s.cam ? `seen from ${s.cam}° ${s.below ? 'below' : 'above'}` : 'seen level';
-  const poseText = s => `Cube ${s.turn ? `turned ${s.turn}°` : 'face-on (turn 0°)'}, ${camText(s)}, ${DW[s.dist]}.`;
+  // The task line must fit on one line of the sheet, so it uses the short distance words.
+  const DS = { far: 'far', avg: 'average distance', close: 'close' };
+  const poseText = s => `Cube ${s.turn ? `turned ${s.turn}°` : 'face-on (turn 0°)'}, ${camText(s)}, ${DS[s.dist]}.`;
   const viewText = (t, p) => `turned ${t.toFixed(0)}°, ` + (Math.abs(p) < 4 ? 'seen level' : `seen from ${Math.abs(p).toFixed(0)}° ${p < 0 ? 'below' : 'above'}`);
   // Turn 0 and turn 90 are the same picture, so a turn error is the shorter way round.
   const turnDiff = (a, b) => ((a - b + 135) % 90) - 45;
@@ -317,7 +319,7 @@ export const DRILLS = (function () {
     opts: yOpts.concat([{ key: 'hidden', label: 'Hidden edges', def: 'yes', choices: [['yes', 'Draw them'], ['no', 'Skip']] }]),
     spec(o) { const s = ySpec(o); s.hidden = o.hidden !== 'no'; return s; },
     lay(s, A) { const m = poseOf(s), P = cubePlace(m, A, 0.45); return { m, P }; },
-    task(s) { return poseText(s) + ` The Y is given. Add the two side edges and the four edges that close the faces${s.hidden ? ', then the three hidden edges' : ''}.`; },
+    task(s) { return poseText(s) + ` The Y is given: add the other edges${s.hidden ? ', hidden ones too' : ' you can see'}.`; },
     draw(g, G, C) { const tf = tfOf(G.P); for (const e of G.m.edges) if (e.isY) D.line(g, tf(G.m.V[e.a]), tf(G.m.V[e.b]), C.blue, 2.5); D.dot(g, tf(G.m.V[G.m.nearH << 2]), 4, C.blue); },
     grade(strokes, s, G) {
       const segs = FH.segmentsOf(strokes); if (!segs.length) return need('No lines found');
@@ -362,7 +364,7 @@ export const DRILLS = (function () {
 
   const cubeNamed = {
     id: 'cubenamed', name: 'Named cube', how: 'Marked against the cube asked for, laid over your drawing at its best size and position. You also get the cube you actually drew.',
-    opts: cubeOpts, spec: cubeSpec, lay() { return {}; }, task(s) { return poseText(s) + ' Draw the whole cube, any size. Hidden edges are optional.'; }, draw() {},
+    opts: cubeOpts, spec: cubeSpec, lay() { return {}; }, task(s) { return poseText(s) + ' Draw the whole cube; hidden edges optional.'; }, draw() {},
     grade(strokes, s) { return gradeNamed(strokes, s, false); }
   };
 
@@ -383,7 +385,7 @@ export const DRILLS = (function () {
       const padL = 46, padT = 26, cell = Math.min((A.w - padL) / 4, (A.h - padT) / 4), x0 = A.cx - (4 * cell + padL) / 2 + padL, y0 = A.cy - (4 * cell + padT) / 2 + padT;
       return { cell, x0, y0, sc: cell * 0.58, below: s.below, k: KS[s.dist] };
     },
-    task(s) { return `The 16 cubes, ${s.below ? 'seen from below' : 'seen from above'}, ${DW[s.dist]}.`; },
+    task(s) { return `The 16 cubes, ${s.below ? 'seen from below' : 'seen from above'}, ${DS[s.dist]}.`; },
     draw(g, G, C) {
       TURNS.forEach((t, c) => D.label(g, t + '°', G.x0 + (c + 0.5) * G.cell, G.y0 - 12, C.muted));
       CAMS.forEach((cam, r) => {
@@ -396,16 +398,18 @@ export const DRILLS = (function () {
 
   const CELLS = CAMS.flatMap(cam => TURNS.map(turn => ({ turn, cam })));
   const cube16 = {
-    id: 'cube16', name: '16 cubes', how: 'The sheet, one cube at a time, left to right and top to bottom. Each is marked like a named cube; the correction also shows the thin face-on cube of its row.',
-    opts: [{ key: 'row', label: 'Rows', def: 'all', choices: [['all', 'All 16']].concat(CAMS.map(c => [String(c), camLabel(c)])) },
+    id: 'cube16', name: '16 cubes', how: 'The sheet, one cube at a time. Pick a turn and a camera to practise one cube, or leave either on All to step through, left to right and top to bottom. Each is marked like a named cube; the correction also shows the thin face-on cube of its row.',
+    opts: [{ key: 'turn', label: 'Turn (column)', def: 'all', choices: [['all', 'All']].concat(TURNS.map(t => [String(t), turnLabel(t)])) },
+      { key: 'cam', label: 'Camera, from above (row)', def: 'all', choices: [['all', 'All']].concat(CAMS.map(c => [String(c), camLabel(c)])) },
       { key: 'model', label: 'Small picture', def: 'show', choices: [['show', 'Shown'], ['hide', 'From memory']] }],
-    // Steps to the cell after the previous one; starts at the first cell of the chosen rows.
+    // Steps to the cell after the previous one within the chosen column and row. With both chosen
+    // the list is one cube, which then repeats.
     spec(o, prev) {
-      const list = CELLS.filter(c => o.row === 'all' || c.cam === +o.row), at = prev ? list.findIndex(c => c.turn === prev.turn && c.cam === prev.cam) : -1, n = (at + 1) % list.length;
+      const list = CELLS.filter(c => (o.turn === 'all' || c.turn === +o.turn) && (o.cam === 'all' || c.cam === +o.cam)), at = prev ? list.findIndex(c => c.turn === prev.turn && c.cam === prev.cam) : -1, n = (at + 1) % list.length;
       return { turn: list[n].turn, cam: list[n].cam, below: false, dist: 'avg', n: n + 1, total: list.length, show: o.model !== 'hide' };
     },
-    lay(s, A) { const m = poseOf(s), sc = 0.11 * A.U; return { m, show: s.show, tf: v => ({ x: A.x1 - 1.1 * sc + sc * v.x, y: A.y0 + 1.1 * sc + sc * v.y }) }; },
-    task(s) { return `Cube ${s.n} of ${s.total}: column ${turnLabel(s.turn)}, row ${s.cam ? s.cam + '° down' : 'level'}. Draw the whole cube with its hidden edges, as on the sheet.`; },
+    lay(s, A) { const m = poseOf(s), sc = 0.2 * A.U; return { m, show: s.show, tf: v => ({ x: A.x1 - 0.85 * sc + sc * v.x, y: A.y0 + 0.9 * sc + sc * v.y }) }; }, // the picture, top right
+    task(s) { return (s.total > 1 ? `Cube ${s.n} of ${s.total}: ` : 'Cube: ') + `turn ${turnLabel(s.turn)}, camera ${s.cam ? s.cam + '° above' : 'level'}. Draw it whole, hidden edges too.`; },
     draw(g, G, C) { if (G.show) drawCell(g, G.m, G.tf, C.blue, C.muted); },
     grade(strokes, s) { return gradeNamed(strokes, s, true); }
   };

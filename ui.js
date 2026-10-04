@@ -18,7 +18,7 @@ import { DRILLS } from './drills.js';
   const session = { n: 0, sum: 0 };
 
   function area() {
-    const top = taskEl.offsetHeight + 10, x0 = 30, x1 = S.W - 30, y0 = top, y1 = S.H - 76;
+    const bar = $('top'), x0 = 30, x1 = S.W - 30, y0 = bar.offsetTop + bar.offsetHeight + 10, y1 = S.H - 20; // below the buttons and task line
     const w = Math.max(60, x1 - x0), h = Math.max(60, y1 - y0);
     return { x0, y0, x1, y1, w, h, cx: x0 + w / 2, cy: y0 + h / 2, U: Math.min(w, h) };
   }
