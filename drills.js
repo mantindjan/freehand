@@ -377,7 +377,7 @@ export const DRILLS = (function () {
     grade(strokes, s, G) {
       const segs = FH.segmentsOf(strokes); if (!segs.length) return need('No lines found');
       const E = G.m.edges.filter(e => !e.isY && (s.hidden || e.visible));
-      const al = FH.alignCube(G.m, segs, { edges: E, fixed: { sc: G.P.sc, rot: 0, tx: G.P.tx, ty: G.P.ty }, pen: 2 * (0.3 * G.P.sc) ** 2 });
+      const al = FH.alignCube(G.m, segs, { join: true, edges: E, fixed: { sc: G.P.sc, rot: 0, tx: G.P.tx, ty: G.P.ty }, pen: 2 * (0.3 * G.P.sc) ** 2 });
       const rep = FH.edgeReport(al), miss = missOf(al), rows = edgeRows(rep, 4);
       const missing = E.filter((e, j) => !al.pairs.some(p => p.ei === j)).map(e => e.name);
       if (missing.length) rows.push({ k: 'Not found', v: missing.join('; '), s: 'bad' });
@@ -396,7 +396,7 @@ export const DRILLS = (function () {
     const m = poseOf(s), nVis = m.edges.filter(e => e.visible).length;
     // Flat views show fewer edges: a level face-on cube is a single square.
     const segs = FH.segmentsOf(strokes); if (segs.length < Math.min(5, nVis)) return need(`Found ${segs.length} edges; draw at least the ${nVis} visible ones`);
-    const a1 = FH.alignCube(m, segs, { hidden: false, maxRoll: 0, iters: 8 }), a2 = segs.length > nVis ? FH.alignCube(m, segs, { hidden: true, maxRoll: 0, iters: 8 }) : null;
+    const a1 = FH.alignCube(m, segs, { hidden: false, maxRoll: 0, iters: 8, join: true }), a2 = segs.length > nVis ? FH.alignCube(m, segs, { hidden: true, maxRoll: 0, iters: 8, join: true }) : null;
     const al = a2 && a2.cost < a1.cost ? a2 : a1, rep = FH.edgeReport(al), miss = missOf(al), R = freeRead(segs, 12), rows = [];
     if (R) { const b = R.best.model, dt = turnDiff(b.turn, s.turn), dp = Math.abs(b.pitch) - s.cam, dw = FH.distanceWords(b.k), face = s.below ? 'bottom' : 'top';
       if (s.cam > 0 && Math.abs(b.pitch) > 4 && (b.pitch < 0) !== s.below) rows.push({ k: 'View', v: `reads as seen from ${b.pitch < 0 ? 'below' : 'above'}, asked ${s.below ? 'below' : 'above'}`, s: 'bad' });

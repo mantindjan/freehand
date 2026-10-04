@@ -197,8 +197,55 @@ export const FH = (function () {
     return { stem: sub(m.V[(1 - m.nearH) << 2], J), right: sub(m.V[1 | (m.nearH << 2)], J), left: sub(m.V[2 | (m.nearH << 2)], J) };
   }
 
-  // Align a posed cube to drawn segments: scale + shift (+ limited roll), edges assigned one to one.
+  /* People build an edge from several strokes: two or three pieces end to end, or the same edge gone
+     over again a few pixels off. The assignment below is one stroke to one edge, so the spare pieces
+     were paired with the wrong edges and came out as edges "50% too long". Once a first alignment
+     says where the cube sits, every segment that lies along one of its edges is put with that edge,
+     and each edge's pieces become one segment spanning them all. A segment that lies along no edge
+     (a badly placed line) is left alone and is matched, or not, as before. */
+  function joinAlongEdges(al) {
+    const groups = new Map(), loose = [], tol = 0.1 * al.sc;
+    for (const sg of al.segs) {
+      let best = null;
+      for (const e of al.E) {
+        const A = al.P[e.a], B = al.P[e.b], L = dist(A, B); if (L < 1e-6) continue;
+        const ux = (B.x - A.x) / L, uy = (B.y - A.y) / L;
+        if (Math.abs(ux * (sg.b.y - sg.a.y) - uy * (sg.b.x - sg.a.x)) / sg.len > Math.sin(15 * DEG)) continue;
+        // distance of each end to the edge itself (not its endless line), so a piece is tied to the
+        // edge it lies on and not to a parallel one further along
+        let d = 0;
+        for (const q of [sg.a, sg.b]) { const t = clamp((q.x - A.x) * ux + (q.y - A.y) * uy, -0.2 * L, 1.2 * L); d = Math.max(d, hyp(q.x - A.x - t * ux, q.y - A.y - t * uy)); }
+        if (d <= tol && (!best || d < best.d)) best = { d, e };
+      }
+      if (!best) { loose.push(sg); continue; }
+      if (!groups.has(best.e)) groups.set(best.e, []); groups.get(best.e).push(sg);
+    }
+    const out = loose.slice();
+    for (const g of groups.values()) {
+      if (g.length === 1) { out.push(g[0]); continue; }
+      // One segment for the group: along its longest piece, through the pieces' common centre, from the
+      // first end to the last.
+      const main = g.reduce((a, b) => b.len > a.len ? b : a), ux = (main.b.x - main.a.x) / main.len, uy = (main.b.y - main.a.y) / main.len;
+      let cx = 0, cy = 0, w = 0; for (const sg of g) { cx += (sg.a.x + sg.b.x) / 2 * sg.len; cy += (sg.a.y + sg.b.y) / 2 * sg.len; w += sg.len; } cx /= w; cy /= w;
+      let lo = Infinity, hi = -Infinity; for (const sg of g) for (const q of [sg.a, sg.b]) { const t = (q.x - cx) * ux + (q.y - cy) * uy; lo = Math.min(lo, t); hi = Math.max(hi, t); }
+      out.push({ a: { x: cx + ux * lo, y: cy + uy * lo }, b: { x: cx + ux * hi, y: cy + uy * hi }, len: hi - lo, rms: Math.max(...g.map(sg => sg.rms || 0)) });
+    }
+    return out;
+  }
+  // Align a posed cube to a drawing. opt.join puts the pieces of each edge together first (see
+  // joinAlongEdges); the searches over many poses leave it off, the final reading turns it on.
   function alignCube(model, segs, opt) {
+    const al = alignOnce(model, segs, opt);
+    if (!al || !opt.join) return al;
+    const joined = joinAlongEdges(al);
+    if (joined.length === segs.length) return al;
+    // Kept only when it helps: where two cube edges nearly coincide (flat views), joining can fuse
+    // strokes of different edges, which shows as fewer edges matched or a worse fit.
+    const al2 = alignOnce(model, joined, opt);
+    return al2 && al2.pairs.length >= al.pairs.length && al2.cost <= al.cost ? al2 : al;
+  }
+  // Align a posed cube to drawn segments: scale + shift (+ limited roll), edges assigned one to one.
+  function alignOnce(model, segs, opt) {
     const E = opt.edges || model.edges.filter(e => opt.hidden || e.visible);
     if (!E.length || !segs.length) return null;
     const pts = []; for (const e of E) pts.push(model.V[e.a], model.V[e.b]);
@@ -280,11 +327,14 @@ export const FH = (function () {
     opt = opt || {}; const maxRoll = opt.maxRoll == null ? 20 : opt.maxRoll;
     if (segs.length < 4) return null;
     const vis = fitCubeMode(segs, false, maxRoll, 0);
-    if (segs.length <= 9) return { best: vis, alt: null };
+    // The reading is chosen on the strokes as drawn; only then are the pieces of each edge joined
+    // (joinAlongEdges), so joining cannot tip the choice between two poses.
+    const join = a => a && Object.assign(alignCube(a.model, segs, { hidden: a.hidden, maxRoll, iters: 5, join: true }), { hidden: a.hidden });
+    if (segs.length <= 9) return { best: join(vis), alt: null };
     const up = fitCubeMode(segs, true, maxRoll, 1), dn = fitCubeMode(segs, true, maxRoll, -1);
     const hid = up.cost <= dn.cost * 1.05 + 1e-6 ? up : dn, other = hid === up ? dn : up;
-    if (vis.cost <= hid.cost) return { best: vis, alt: null };
-    return { best: hid, alt: other.cost < hid.cost * 1.6 + 2e-3 ? other : null };
+    if (vis.cost <= hid.cost) return { best: join(vis), alt: null };
+    return { best: join(hid), alt: other.cost < hid.cost * 1.6 + 2e-3 ? other : null };
   }
   // per-edge report of an alignment
   function edgeReport(al) {

@@ -126,8 +126,14 @@ import { DEFAULT_REPO, syncConfig, setSyncConfig, syncState, sync } from './sync
     const A = area();
     addAttempt({ v: SCHEMA, t: Date.now(), exercise: S.drill.id, prompt: S.spec, score: r.score, title: r.title, rows: r.rows.map(x => ({ k: x.k, v: x.v, s: x.s || '' })),
       sheet: { w: Math.round(S.W), h: Math.round(S.H), area: { x0: A.x0, y0: Math.round(A.y0), x1: Math.round(A.x1), y1: Math.round(A.y1) } },
-      strokes: S.strokes.slice(0, S.gradedCount).map(st => ({ pen: st.sketch ? 'sketch' : 'final', points: packStroke(st) })) }).then(runSync);
+      strokes: S.strokes.slice(0, S.gradedCount).map(st => ({ pen: st.sketch ? 'sketch' : 'final', points: packStroke(st) })) }).then(syncSoon);
   }
+  // An upload rewrites the whole day's file for that exercise, and git keeps every version, so
+  // syncing after each Check would send and store the same drawings over and over. Instead: at most
+  // one upload every SYNC_EVERY_MS while drawing, and one when the app is put away.
+  const SYNC_EVERY_MS = 5 * 60 * 1000; let syncTimer = null;
+  function syncSoon() { if (!syncTimer) syncTimer = setTimeout(() => { syncTimer = null; runSync(); }, SYNC_EVERY_MS); }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && syncTimer) { clearTimeout(syncTimer); syncTimer = null; runSync(); } });
   // Sync is automatic and silent; the dot on the header button shows how the last one went.
   function runSync() {
     return sync().then(res => { if (!res.off) $('gear').dataset.sync = res.ok ? 'ok' : 'error'; return res; });
