@@ -128,9 +128,10 @@ import { DEFAULT_REPO, syncConfig, setSyncConfig, syncState, sync } from './sync
       sheet: { w: Math.round(S.W), h: Math.round(S.H), area: { x0: A.x0, y0: Math.round(A.y0), x1: Math.round(A.x1), y1: Math.round(A.y1) } },
       strokes: S.strokes.slice(0, S.gradedCount).map(st => ({ pen: st.sketch ? 'sketch' : 'final', points: packStroke(st) })) }).then(syncSoon);
   }
-  // An upload rewrites the whole day's file for that exercise, and git keeps every version, so
-  // syncing after each Check would send and store the same drawings over and over. Instead: at most
-  // one upload every SYNC_EVERY_MS while drawing, and one when the app is put away.
+  // Checked drawings accumulate and go up at most once every SYNC_EVERY_MS, plus once when the app
+  // is put away. GitHub throttles an account past roughly 500 content writes an hour; five minutes
+  // is at most 12 an hour, far from it even on the quick exercises (boss, 2026-10-04). Size is not
+  // the reason: the data is small.
   const SYNC_EVERY_MS = 5 * 60 * 1000; let syncTimer = null;
   function syncSoon() { if (!syncTimer) syncTimer = setTimeout(() => { syncTimer = null; runSync(); }, SYNC_EVERY_MS); }
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && syncTimer) { clearTimeout(syncTimer); syncTimer = null; runSync(); } });
