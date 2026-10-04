@@ -234,19 +234,32 @@ export const DRILLS = (function () {
   };
 
   /* ---------- Cube ---------- */
-  const cubeOpts = [
-    { key: 'turn', label: 'Turn', def: 'r', choices: [['r', 'Random'], ['22.5', '22.5°'], ['45', '45°'], ['67.5', '67.5°']] },
-    { key: 'cam', label: 'Camera', def: 'r', choices: [['r', 'Random'], ['15', '15° low'], ['22.5', '22.5°'], ['35', '35° high'], ['45', '45°'], ['67.5', '67.5°']] },
+  /* Set-up follows Krenz's 16-cube sheet: four turns, four camera rows. The sheet is drawn at average
+     distance (front pillar to back pillar about 5:4), so that is the default. */
+  const TURNS = [0, 22.5, 45, 67.5], CAMS = [0, 22.5, 45, 67.5];
+  const turnLabel = t => t ? t + '°' : '0° face-on', camLabel = c => c ? c + '°' : 'Level';
+  // The Y and Complete the cube leave out the face-on column: its left arm points straight back and
+  // shrinks to a stub, so there is no Y to draw.
+  const cubeOptsFor = turns => [
+    { key: 'turn', label: 'Turn', def: 'r', choices: [['r', 'Random']].concat(turns.map(t => [String(t), turnLabel(t)])) },
+    { key: 'cam', label: 'Camera', def: 'r', choices: [['r', 'Random']].concat(CAMS.map(c => [String(c), camLabel(c)])) },
     { key: 'view', label: 'Seen from', def: 'above', choices: [['above', 'Above'], ['below', 'Below'], ['either', 'Either']] },
-    { key: 'dist', label: 'Distance', def: 'far', choices: [['far', 'Far'], ['avg', 'Average'], ['close', 'Close'], ['r', 'Random']] }];
+    { key: 'dist', label: 'Distance', def: 'avg', choices: [['far', 'Far'], ['avg', 'Average'], ['close', 'Close'], ['r', 'Random']] }];
+  const cubeOpts = cubeOptsFor(TURNS), yOpts = cubeOptsFor(TURNS.slice(1));
   const KS = { far: 0.05, avg: 0.2, close: 0.5 }, DW = { far: 'far away (20 cube-lengths)', avg: 'at average distance (5 cube-lengths)', close: 'close (2 cube-lengths)' };
-  function cubeSpec(o) {
-    const dist = o.dist === 'r' ? pick(['far', 'avg', 'close']) : o.dist, below = o.view === 'below' || (o.view === 'either' && Math.random() < 0.5);
-    return { turn: o.turn === 'r' ? pick([22.5, 45, 67.5]) : +o.turn, cam: o.cam === 'r' ? pick([15, 22.5, 35, 45, 67.5]) : +o.cam, below, dist };
-  }
+  const specFor = turns => o => {
+    const dist = o.dist === 'r' ? pick(['far', 'avg', 'close']) : o.dist, cam = o.cam === 'r' ? pick(CAMS) : +o.cam;
+    // A level camera is neither above nor below.
+    const below = cam > 0 && (o.view === 'below' || (o.view === 'either' && Math.random() < 0.5));
+    return { turn: o.turn === 'r' ? pick(turns) : +o.turn, cam, below, dist };
+  };
+  const cubeSpec = specFor(TURNS), ySpec = specFor(TURNS.slice(1));
   const poseOf = s => FH.cubeModel(s.turn, s.below ? -s.cam : s.cam, KS[s.dist]);
-  const poseText = s => `Cube turned ${s.turn}°, seen from ${s.cam}° ${s.below ? 'below' : 'above'}, ${DW[s.dist]}.`;
-  const viewText = (t, p) => `turned ${t.toFixed(0)}°, seen from ${Math.abs(p).toFixed(0)}° ${p < 0 ? 'below' : 'above'}`;
+  const camText = s => s.cam ? `seen from ${s.cam}° ${s.below ? 'below' : 'above'}` : 'seen level';
+  const poseText = s => `Cube ${s.turn ? `turned ${s.turn}°` : 'face-on (turn 0°)'}, ${camText(s)}, ${DW[s.dist]}.`;
+  const viewText = (t, p) => `turned ${t.toFixed(0)}°, ` + (Math.abs(p) < 4 ? 'seen level' : `seen from ${Math.abs(p).toFixed(0)}° ${p < 0 ? 'below' : 'above'}`);
+  // Turn 0 and turn 90 are the same picture, so a turn error is the shorter way round.
+  const turnDiff = (a, b) => ((a - b + 135) % 90) - 45;
   function describeEdge(r) {
     const bits = [];
     if (Math.abs(r.dAng) >= 2) bits.push(`${Math.abs(r.dAng).toFixed(0)}° ${r.dAng > 0 ? 'clockwise' : 'anticlockwise'}`);
@@ -272,7 +285,7 @@ export const DRILLS = (function () {
 
   const cubeY = {
     id: 'cubey', name: 'The Y', how: 'Marked on the direction of the stem and each arm, and on each arm’s length as a share of your stem. Any size, anywhere.',
-    opts: cubeOpts, spec: cubeSpec, lay() { return {}; }, task(s) { return poseText(s) + ' Draw its Y: the stem, then the two arms.'; }, draw() {},
+    opts: yOpts, spec: ySpec, lay() { return {}; }, task(s) { return poseText(s) + ' Draw its Y: the stem, then the two arms.'; }, draw() {},
     grade(strokes, s) {
       let segs = FH.segmentsOf(strokes); if (segs.length < 3) return need(`Found ${segs.length} line${segs.length === 1 ? '' : 's'}; a Y needs 3`);
       segs = segs.sort((a, b) => b.len - a.len).slice(0, 3);
@@ -284,7 +297,7 @@ export const DRILLS = (function () {
       const stem = arms[0], left = arms[1].x <= arms[2].x ? arms[1] : arms[2], right = left === arms[1] ? arms[2] : arms[1], sl = Math.hypot(stem.x, stem.y);
       const model = poseOf(s), my = FH.modelY(model), ms = Math.hypot(my.stem.x, my.stem.y);
       const rows = [], terms = [], dS = angDiff(clockDeg(stem), clockDeg(my.stem));
-      rows.push({ k: 'Stem', v: Math.abs(dS) < 1.5 ? 'straight' : `${Math.abs(dS).toFixed(0)}° off vertical`, s: st(dS, 2, 5) }); terms.push((dS / 5) ** 2);
+      rows.push({ k: 'Stem', v: Math.abs(dS) < 1.5 ? 'right direction' : `${Math.abs(dS).toFixed(0)}° off the true stem`, s: st(dS, 2, 5) }); terms.push((dS / 5) ** 2);
       const meas = {};
       for (const [nm, u, t] of [['Left', left, my.left], ['Right', right, my.right]]) {
         const ud = clockDeg(u), td = clockDeg(t), d = angDiff(ud, td), ul = Math.hypot(u.x, u.y) / sl, tl = Math.hypot(t.x, t.y) / ms, dl = ul / tl - 1;
@@ -294,15 +307,15 @@ export const DRILLS = (function () {
         terms.push((d / 6) ** 2, (dl / 0.1) ** 2); meas[nm.toLowerCase() + 'Deg'] = ud; meas[nm.toLowerCase() + 'Len'] = ul;
       }
       const fy = FH.fitY(meas, model.k, s.below ? -1 : 1), k = sl / ms;
-      return { score: score(Math.sqrt(terms.reduce((a, b) => a + b, 0) / terms.length)), title: `You drew a cube ${viewText(fy.turn, fy.pitch)}`, sub: `Asked: turned ${s.turn}°, seen from ${s.cam}° ${s.below ? 'below' : 'above'}. The red Y is the true one at your stem length.`, rows, notes: [],
+      return { score: score(Math.sqrt(terms.reduce((a, b) => a + b, 0) / terms.length)), title: `You drew a cube ${viewText(fy.turn, fy.pitch)}`, sub: `Asked: turned ${s.turn}°, ${camText(s)}. The red Y is the true one at your stem length.`, rows, notes: [],
         overlay: (g, C) => { for (const v of [my.stem, my.left, my.right]) D.line(g, J, { x: J.x + v.x * k, y: J.y + v.y * k }, C.red, 2); D.dot(g, J, 3, C.red); } };
     }
   };
 
   const cubeDone = {
     id: 'cubedone', name: 'Complete the cube', how: 'Marked edge by edge against the true cube built on the given Y, plus the recipe checks: each family of edges closes going back, and the hidden upright lands on the hidden corner.',
-    opts: cubeOpts.concat([{ key: 'hidden', label: 'Hidden edges', def: 'yes', choices: [['yes', 'Draw them'], ['no', 'Skip']] }]),
-    spec(o) { const s = cubeSpec(o); s.hidden = o.hidden !== 'no'; return s; },
+    opts: yOpts.concat([{ key: 'hidden', label: 'Hidden edges', def: 'yes', choices: [['yes', 'Draw them'], ['no', 'Skip']] }]),
+    spec(o) { const s = ySpec(o); s.hidden = o.hidden !== 'no'; return s; },
     lay(s, A) { const m = poseOf(s), P = cubePlace(m, A, 0.45); return { m, P }; },
     task(s) { return poseText(s) + ` The Y is given. Add the two side edges and the four edges that close the faces${s.hidden ? ', then the three hidden edges' : ''}.`; },
     draw(g, G, C) { const tf = tfOf(G.P); for (const e of G.m.edges) if (e.isY) D.line(g, tf(G.m.V[e.a]), tf(G.m.V[e.b]), C.blue, 2.5); D.dot(g, tf(G.m.V[G.m.nearH << 2]), 4, C.blue); },
@@ -322,29 +335,86 @@ export const DRILLS = (function () {
 
   function freeRead(segs, roll) { const R = FH.fitCube(segs, { maxRoll: roll }); return R && R.best ? R : null; }
 
+  // Marks a whole cube against the one asked for. Shared by Named cube and the 16-cube course.
+  // faceOn adds the sheet's thin face-on cube of the same row under the correction.
+  function gradeNamed(strokes, s, faceOn) {
+    const m = poseOf(s), nVis = m.edges.filter(e => e.visible).length;
+    // Flat views show fewer edges: a level face-on cube is a single square.
+    const segs = FH.segmentsOf(strokes); if (segs.length < Math.min(5, nVis)) return need(`Found ${segs.length} edges; draw at least the ${nVis} visible ones`);
+    const a1 = FH.alignCube(m, segs, { hidden: false, maxRoll: 0, iters: 8 }), a2 = segs.length > nVis ? FH.alignCube(m, segs, { hidden: true, maxRoll: 0, iters: 8 }) : null;
+    const al = a2 && a2.cost < a1.cost ? a2 : a1, rep = FH.edgeReport(al), miss = missOf(al), R = freeRead(segs, 12), rows = [];
+    if (R) { const b = R.best.model, dt = turnDiff(b.turn, s.turn), dp = Math.abs(b.pitch) - s.cam, dw = FH.distanceWords(b.k), face = s.below ? 'bottom' : 'top';
+      if (s.cam > 0 && Math.abs(b.pitch) > 4 && (b.pitch < 0) !== s.below) rows.push({ k: 'View', v: `reads as seen from ${b.pitch < 0 ? 'below' : 'above'}, asked ${s.below ? 'below' : 'above'}`, s: 'bad' });
+      rows.push({ k: 'Turn', v: `drew ${b.turn.toFixed(0)}°, asked ${s.turn}°` + (Math.abs(dt) < 4 ? '' : dt > 0 ? ': left face too wide' : ': right face too wide'), s: st(dt, 5, 11) });
+      rows.push({ k: 'Camera', v: `drew ${Math.abs(b.pitch).toFixed(0)}°, asked ${s.cam ? s.cam + '°' : 'level'}` + (Math.abs(dp) < 4 ? '' : dp > 0 ? `: ${face} face too open` : `: ${face} face too flat`), s: st(dp, 5, 11) });
+      rows.push({ k: 'Distance', v: `reads as ${dw.text}; asked ${DW[s.dist]}` }); }
+    const checks = FH.familyChecks(rep.map(r => ({ edge: r.edge, ua: r.ua, ub: r.ub })), m), hc = hiddenCheck(rep, al.sc); if (hc) checks.push(hc);
+    return { score: Math.round(score(miss / 0.08) * al.pairs.length / al.E.length), title: R ? `You drew a cube ${viewText(R.best.model.turn, R.best.model.pitch)}` : 'Against the cube asked for',
+      sub: `Against the cube asked for, corners miss by ${pct(miss)} of an edge on average. It is shown in red.`, rows: rows.concat(edgeRows(rep, 3), checks), notes: [],
+      overlay: (g, C) => {
+        if (faceOn && s.turn) { // both cubes share a centre, so the alignment of the true cube places the face-on one too
+          const f = FH.cubeModel(0, m.pitch, m.k), cr = Math.cos(al.rot), sr = Math.sin(al.rot), tf = v => ({ x: al.sc * (cr * v.x - sr * v.y) + al.tx, y: al.sc * (sr * v.x + cr * v.y) + al.ty });
+          for (const e of f.edges) D.line(g, tf(f.V[e.a]), tf(f.V[e.b]), C.muted, 1);
+        }
+        drawCube(g, al, C.red, true);
+      } };
+  }
+
   const cubeNamed = {
     id: 'cubenamed', name: 'Named cube', how: 'Marked against the cube asked for, laid over your drawing at its best size and position. You also get the cube you actually drew.',
     opts: cubeOpts, spec: cubeSpec, lay() { return {}; }, task(s) { return poseText(s) + ' Draw the whole cube, any size. Hidden edges are optional.'; }, draw() {},
-    grade(strokes, s) {
-      const segs = FH.segmentsOf(strokes); if (segs.length < 5) return need(`Found ${segs.length} edges; draw at least the nine visible ones`);
-      const m = poseOf(s), a1 = FH.alignCube(m, segs, { hidden: false, maxRoll: 0, iters: 8 }), a2 = segs.length > 9 ? FH.alignCube(m, segs, { hidden: true, maxRoll: 0, iters: 8 }) : null;
-      const al = a2 && a2.cost < a1.cost ? a2 : a1, rep = FH.edgeReport(al), miss = missOf(al), R = freeRead(segs, 12), rows = [];
-      if (R) { const b = R.best.model, dt = b.turn - s.turn, dp = Math.abs(b.pitch) - s.cam, dw = FH.distanceWords(b.k);
-        if ((b.pitch < 0) !== s.below) rows.push({ k: 'View', v: `reads as seen from ${b.pitch < 0 ? 'below' : 'above'}, asked ${s.below ? 'below' : 'above'}`, s: 'bad' });
-        rows.push({ k: 'Turn', v: `drew ${b.turn.toFixed(0)}°, asked ${s.turn}°` + (Math.abs(dt) < 4 ? '' : dt > 0 ? ': left face too wide' : ': right face too wide'), s: st(dt, 5, 11) });
-        rows.push({ k: 'Camera', v: `drew ${Math.abs(b.pitch).toFixed(0)}°, asked ${s.cam}°` + (Math.abs(dp) < 4 ? '' : dp > 0 ? `: ${s.below ? 'bottom' : 'top'} face too open` : `: ${s.below ? 'bottom' : 'top'} face too flat`), s: st(dp, 5, 11) });
-        rows.push({ k: 'Distance', v: `reads as ${dw.text}; asked ${DW[s.dist]}` }); }
-      const checks = FH.familyChecks(rep.map(r => ({ edge: r.edge, ua: r.ua, ub: r.ub })), m), hc = hiddenCheck(rep, al.sc); if (hc) checks.push(hc);
-      return { score: Math.round(score(miss / 0.08) * al.pairs.length / al.E.length), title: R ? `You drew a cube ${viewText(R.best.model.turn, R.best.model.pitch)}` : 'Against the cube asked for',
-        sub: `Against the cube asked for, corners miss by ${pct(miss)} of an edge on average. It is shown in red.`, rows: rows.concat(edgeRows(rep, 3), checks), notes: [], overlay: (g, C) => drawCube(g, al, C.red, true) };
+    grade(strokes, s) { return gradeNamed(strokes, s, false); }
+  };
+
+  /* ---------- Krenz's 16-cube sheet ---------- */
+  // One cell of the sheet: the thin face-on cube of the row, then the turned cube over it with
+  // its hidden edges thin. Both sit on the same centre, as on the sheet.
+  function drawCell(g, m, tf, color, thin) {
+    if (m.turn) { const f = FH.cubeModel(0, m.pitch, m.k); for (const e of f.edges) D.line(g, tf(f.V[e.a]), tf(f.V[e.b]), thin, 1); }
+    for (const vis of [false, true]) for (const e of m.edges) if (e.visible === vis) D.line(g, tf(m.V[e.a]), tf(m.V[e.b]), color, vis ? 2.2 : 1);
+  }
+  const cubeTable = {
+    id: 'cubetable', name: 'The table', reference: true,
+    how: 'Krenz’s 16 cubes: four turns across, four camera heights down. The thin cube in each cell is the face-on cube of that row, on the same centre. Nothing is marked here; draw over the sheet to trace it.',
+    opts: [{ key: 'view', label: 'Seen from', def: 'above', choices: [['above', 'Above'], ['below', 'Below']] },
+      { key: 'dist', label: 'Distance', def: 'avg', choices: [['far', 'Far'], ['avg', 'Average'], ['close', 'Close']] }],
+    spec(o) { return { below: o.view === 'below', dist: o.dist }; },
+    lay(s, A) { // a square grid with a margin on the left and top for the row and column names
+      const padL = 46, padT = 26, cell = Math.min((A.w - padL) / 4, (A.h - padT) / 4), x0 = A.cx - (4 * cell + padL) / 2 + padL, y0 = A.cy - (4 * cell + padT) / 2 + padT;
+      return { cell, x0, y0, sc: cell * 0.58, below: s.below, k: KS[s.dist] };
+    },
+    task(s) { return `The 16 cubes, ${s.below ? 'seen from below' : 'seen from above'}, ${DW[s.dist]}.`; },
+    draw(g, G, C) {
+      TURNS.forEach((t, c) => D.label(g, t + '°', G.x0 + (c + 0.5) * G.cell, G.y0 - 12, C.muted));
+      CAMS.forEach((cam, r) => {
+        D.label(g, cam ? cam + '°' : 'Level', G.x0 - 24, G.y0 + (r + 0.5) * G.cell, C.muted);
+        TURNS.forEach((t, c) => { const cx = G.x0 + (c + 0.5) * G.cell, cy = G.y0 + (r + 0.5) * G.cell;
+          drawCell(g, FH.cubeModel(t, G.below ? -cam : cam, G.k), v => ({ x: cx + G.sc * v.x, y: cy + G.sc * v.y }), C.blue, C.muted); });
+      });
     }
+  };
+
+  const CELLS = CAMS.flatMap(cam => TURNS.map(turn => ({ turn, cam })));
+  const cube16 = {
+    id: 'cube16', name: '16 cubes', how: 'The sheet, one cube at a time, left to right and top to bottom. Each is marked like a named cube; the correction also shows the thin face-on cube of its row.',
+    opts: [{ key: 'row', label: 'Rows', def: 'all', choices: [['all', 'All 16']].concat(CAMS.map(c => [String(c), camLabel(c)])) },
+      { key: 'model', label: 'Small picture', def: 'show', choices: [['show', 'Shown'], ['hide', 'From memory']] }],
+    // Steps to the cell after the previous one; starts at the first cell of the chosen rows.
+    spec(o, prev) {
+      const list = CELLS.filter(c => o.row === 'all' || c.cam === +o.row), at = prev ? list.findIndex(c => c.turn === prev.turn && c.cam === prev.cam) : -1, n = (at + 1) % list.length;
+      return { turn: list[n].turn, cam: list[n].cam, below: false, dist: 'avg', n: n + 1, total: list.length, show: o.model !== 'hide' };
+    },
+    lay(s, A) { const m = poseOf(s), sc = 0.11 * A.U; return { m, show: s.show, tf: v => ({ x: A.x1 - 1.1 * sc + sc * v.x, y: A.y0 + 1.1 * sc + sc * v.y }) }; },
+    task(s) { return `Cube ${s.n} of ${s.total}: column ${turnLabel(s.turn)}, row ${s.cam ? s.cam + '° down' : 'level'}. Draw the whole cube with its hidden edges, as on the sheet.`; },
+    draw(g, G, C) { if (G.show) drawCell(g, G.m, G.tf, C.blue, C.muted); },
+    grade(strokes, s) { return gradeNamed(strokes, s, true); }
   };
 
   const cubeFree = {
     id: 'cubefree', name: 'Free cube', free: true, how: 'Draw any cube. The app finds the true cube nearest to your drawing and names its turn, camera angle and distance.',
     opts: [], spec() { return {}; }, lay() { return {}; }, task() { return 'Draw any cube. One stroke per edge reads best; hidden edges are optional.'; }, draw() {},
     grade(strokes) {
-      const segs = FH.segmentsOf(strokes); if (segs.length < 5) return need(`Found ${segs.length} edges; draw at least the nine visible ones`);
+      const segs = FH.segmentsOf(strokes); if (segs.length < 4) return need(`Found ${segs.length} edges; draw at least the visible ones`);
       const R = freeRead(segs, 20); if (!R) return need('Could not read a cube here');
       const al = R.best, b = al.model, rep = FH.edgeReport(al), miss = missOf(al), tn = FH.tableNames(b.turn, b.pitch), dw = FH.distanceWords(b.k), roll = al.rot / DEG;
       const rows = [{ k: 'Turn', v: `${b.turn.toFixed(0)}°; nearest table column ${tn.turn}°` }, { k: 'Camera', v: `${Math.abs(b.pitch).toFixed(0)}° from ${b.pitch < 0 ? 'below' : 'above'}; nearest table row ${tn.pitch}°` }, { k: 'Distance', v: dw.text }];
@@ -361,5 +431,5 @@ export const DRILLS = (function () {
     }
   };
 
-  return { sections: [{ id: 'proportion', name: 'Proportion', drills: [divide, ratio, clock, measure] }, { id: 'ellipse', name: 'Ellipse', drills: [ellFree, ellBox, ellTop, ellDeg] }, { id: 'cube', name: 'Cube', drills: [cubeY, cubeDone, cubeNamed, cubeFree] }] };
+  return { sections: [{ id: 'proportion', name: 'Proportion', drills: [divide, ratio, clock, measure] }, { id: 'ellipse', name: 'Ellipse', drills: [ellFree, ellBox, ellTop, ellDeg] }, { id: 'cube', name: 'Cube', drills: [cubeTable, cube16, cubeY, cubeDone, cubeNamed, cubeFree] }] };
 })();

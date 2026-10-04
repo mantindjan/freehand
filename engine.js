@@ -159,7 +159,11 @@ export const FH = (function () {
     const th = turn * DEG, ph = pitch * DEG, c = Math.cos(th), s = Math.sin(th), cp = Math.cos(ph), sp = Math.sin(ph);
     const toCam = (x, y, z) => [x, y * cp + z * sp, -y * sp + z * cp];
     const nearH = pitch >= 0 ? 1 : 0;
-    const world = (i, j, h) => [i * c - j * s, h - nearH, i * s + j * c];
+    // The view is centred on the middle of the cube, and the cube turns about its own upright axis,
+    // as on Krenz's sheet. That is what makes the face-on column (turn 0) symmetric and puts the
+    // horizon through the middle of the cube in the level row. Corners are scaled towards that
+    // centre by 1 / (1 + k * depth), depth counted from the nearest corner.
+    const world = (i, j, h) => [(i - 0.5) * c - (j - 0.5) * s, h - 0.5, (i - 0.5) * s + (j - 0.5) * c];
     const cam = []; for (let n = 0; n < 8; n++) cam.push(toCam(...world(n & 1, (n >> 1) & 1, (n >> 2) & 1)));
     let zmin = Infinity; for (const q of cam) zmin = Math.min(zmin, q[2]);
     const proj = q => { const d = 1 + k * (q[2] - zmin); return { x: q[0] / d, y: -q[1] / d, depth: q[2] - zmin }; };

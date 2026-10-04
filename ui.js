@@ -111,10 +111,11 @@ import { DRILLS } from './drills.js';
   function buttons() {
     const done = !!S.result, go = $('go');
     go.textContent = done ? (S.drill.free ? 'New sheet' : 'Next') : 'Check'; go.disabled = !done && !finals().length;
+    go.hidden = !!S.drill.reference; // a reference sheet is looked at and traced, never marked
     $('again').hidden = !done || !!S.drill.free; $('undo').disabled = !S.strokes.length; $('clear').disabled = !S.strokes.length && !done;
     $('tally').textContent = session.n ? `This sitting: ${session.n} checked, average ${Math.round(session.sum / session.n)}` : 'This sitting: nothing checked yet';
   }
-  $('go').addEventListener('click', () => { if (S.result) return newPrompt(); if (!finals().length) return; $('go').textContent = 'Reading…'; $('go').disabled = true; setTimeout(check, 30); });
+  $('go').addEventListener('click', () => { if (S.drill.reference) return; if (S.result) return newPrompt(); if (!finals().length) return; $('go').textContent = 'Reading…'; $('go').disabled = true; setTimeout(check, 30); });
   $('again').addEventListener('click', () => { S.strokes = []; S.result = null; render(); renderPanel(); buttons(); });
   $('clear').addEventListener('click', () => { S.strokes = []; S.result = null; render(); renderPanel(); buttons(); });
   $('undo').addEventListener('click', () => {
@@ -134,10 +135,10 @@ import { DRILLS } from './drills.js';
       if (r.rows.length) h += '<dl class="rows">' + r.rows.map(x => `<div class="row ${x.s || ''}"><span class="mark"></span><dt>${esc(x.k)}</dt><dd>${esc(x.v)}</dd></div>`).join('') + '</dl>';
       if (r.notes.length) h += '<ul class="notes">' + r.notes.map(n => `<li>${esc(n)}</li>`).join('') + '</ul>';
       h += '</section>';
-    } else h += `<section><h3>How it is marked</h3><p class="how">${esc(d.how)}</p></section>`;
+    } else h += `<section><h3>${d.reference ? 'About this sheet' : 'How it is marked'}</h3><p class="how">${esc(d.how)}</p></section>`;
     if (d.opts.length) h += '<section><h3>Set-up</h3>' + d.opts.map(op => `<div class="opt"><span>${esc(op.label)}</span><div>` + op.choices.map(c => `<button type="button" data-k="${op.key}" data-v="${c[0]}" aria-pressed="${o[op.key] === c[0]}">${esc(c[1])}</button>`).join('') + '</div></div>').join('') + '</section>';
     const hist = (saved.hist[d.id] || []).slice(-10);
-    h += '<section><h3>Last ten on this exercise</h3>' + (hist.length ? `<div class="hist"><div class="bars">${hist.map(s => `<i class="${tier(s)}" style="height:${Math.max(6, s)}%"></i>`).join('')}</div><b>avg ${Math.round(hist.reduce((a, b) => a + b, 0) / hist.length)}</b></div>` : '<p class="how">Nothing marked yet.</p>') + '</section>';
+    if (!d.reference) h += '<section><h3>Last ten on this exercise</h3>' + (hist.length ? `<div class="hist"><div class="bars">${hist.map(s => `<i class="${tier(s)}" style="height:${Math.max(6, s)}%"></i>`).join('')}</div><b>avg ${Math.round(hist.reduce((a, b) => a + b, 0) / hist.length)}</b></div>` : '<p class="how">Nothing marked yet.</p>') + '</section>';
     panel.innerHTML = h;
   }
   panel.addEventListener('click', e => {
