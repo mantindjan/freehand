@@ -197,5 +197,7 @@ import { DRILLS } from './drills.js';
   open(DRILLS.sections.some(s => s.id === hash) ? hash : saved.sec);
   if (window.ResizeObserver) new ResizeObserver(resize).observe(stage); else window.addEventListener('resize', resize);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (S.spec && !S.strokes.length && !S.result) layout(); render(); });
+  // Offline start-up (sw.js). Without service worker support the page simply needs the network, as before.
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { /* e.g. private browsing: the page still works online */ });
   window.__fh = { S, check, open, FH, setTool }; // handle for the page tests (modules have no globals to reach otherwise)
 })();
