@@ -1,5 +1,7 @@
 import { FH } from './engine.js';
 import { DRILLS } from './drills.js';
+import { SCHEMA, addAttempt, countAttempts, packStroke } from './store.js';
+import { DEFAULT_REPO, syncConfig, setSyncConfig, syncState, sync } from './sync.js';
 
 (function () {
   const $ = id => document.getElementById(id), esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -114,7 +116,40 @@ import { DRILLS } from './drills.js';
     S.result = r; S.gradedCount = S.strokes.length;
     if (r.score != null) { const h = saved.hist[S.drill.id] = (saved.hist[S.drill.id] || []).concat(r.score).slice(-30); session.n++; session.sum += r.score; save(); }
     render(); renderPanel(); buttons(); panel.scrollTop = 0;
+    record(r);
   }
+
+  /* Practice history. Each Check is saved on the device (store.js) with the prompt, the marking
+     and the strokes themselves, sketch included, so a drawing can be marked again later under
+     new scoring and the misses analysed. Format: docs/data.md. Then it is synced (sync.js). */
+  function record(r) {
+    const A = area();
+    addAttempt({ v: SCHEMA, t: Date.now(), exercise: S.drill.id, prompt: S.spec, score: r.score, title: r.title, rows: r.rows.map(x => ({ k: x.k, v: x.v, s: x.s || '' })),
+      sheet: { w: Math.round(S.W), h: Math.round(S.H), area: { x0: A.x0, y0: Math.round(A.y0), x1: Math.round(A.x1), y1: Math.round(A.y1) } },
+      strokes: S.strokes.slice(0, S.gradedCount).map(st => ({ pen: st.sketch ? 'sketch' : 'final', points: packStroke(st) })) }).then(runSync);
+  }
+  // Sync is automatic and silent; the dot on the header button shows how the last one went.
+  function runSync() {
+    return sync().then(res => { if (!res.off) $('gear').dataset.sync = res.ok ? 'ok' : 'error'; return res; });
+  }
+  const box = $('syncbox');
+  async function showSyncBox() {
+    const c = syncConfig(), st = syncState();
+    $('syncrepo').value = c.repo || DEFAULT_REPO; $('synctoken').value = c.token;
+    const n = await countAttempts();
+    $('synccount').textContent = `${n} drawing${n === 1 ? '' : 's'} saved on this device.`;
+    $('syncstatus').textContent = !c.token ? 'Sync is off: no token yet.' : st.error ? st.error : st.last ? 'Last synced ' + new Date(st.last).toLocaleString() + '.' : 'Not synced yet.';
+    box.showModal();
+  }
+  $('gear').addEventListener('click', showSyncBox);
+  $('syncclose').addEventListener('click', () => box.close());
+  $('syncsave').addEventListener('click', async () => {
+    setSyncConfig($('syncrepo').value, $('synctoken').value);
+    $('syncstatus').textContent = 'Syncing…';
+    const res = await runSync();
+    $('syncstatus').textContent = res.off ? 'Sync is off: it needs both a repo and a token.' : res.ok ? `Synced. ${res.uploaded} file${res.uploaded === 1 ? '' : 's'} uploaded.` : res.message;
+  });
+  window.addEventListener('online', runSync);
   function buttons() {
     const done = !!S.result, go = $('go');
     go.textContent = done ? (S.drill.free ? 'New sheet' : 'Next') : 'Check'; go.disabled = !done && !finals().length;
@@ -135,7 +170,7 @@ import { DRILLS } from './drills.js';
   // gesture events, and any touch move with two fingers down.
   for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, e => e.preventDefault());
   document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
-  document.addEventListener('keydown', e => { if (e.key === 'Enter') $('go').click(); else if (e.key === 'z' || e.key === 'Backspace') $('undo').click(); });
+  document.addEventListener('keydown', e => { if (box.open) return; if (e.key === 'Enter') $('go').click(); else if (e.key === 'z' || e.key === 'Backspace') $('undo').click(); });
 
   const tier = s => s >= 80 ? 'good' : s >= 55 ? 'warn' : 'bad';
   function renderPanel() {
@@ -199,5 +234,6 @@ import { DRILLS } from './drills.js';
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (S.spec && !S.strokes.length && !S.result) layout(); render(); });
   // Offline start-up (sw.js). Without service worker support the page simply needs the network, as before.
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { /* e.g. private browsing: the page still works online */ });
+  runSync(); // catch up on anything recorded while offline
   window.__fh = { S, check, open, FH, setTool }; // handle for the page tests (modules have no globals to reach otherwise)
 })();

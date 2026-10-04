@@ -57,6 +57,22 @@ button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .tabs { display: flex; gap: 4px; }
 .tabs button { padding: 8px 14px; min-height: 40px; font-weight: 600; font-size: 16px; color: var(--muted); border-bottom: 3px solid transparent; }
 .tabs button[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--red); }
+.gear { padding: 6px 8px; border-radius: 8px; color: var(--muted); position: relative; }
+.gear svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; display: block; }
+/* A dot on the button: green when the last sync went through, red when it failed. */
+.gear[data-sync]::after { content: ""; position: absolute; top: 3px; right: 3px; width: 7px; height: 7px; border-radius: 50%; background: var(--good); }
+.gear[data-sync="error"]::after { background: var(--bad); }
+.syncbox { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--fg); padding: 18px; width: min(440px, calc(100vw - 40px)); box-sizing: border-box; }
+.syncbox::backdrop { background: rgba(0, 0, 0, 0.45); }
+.syncbox h2 { margin: 0 0 10px; font-family: var(--display); font-size: 20px; }
+.syncbox h3 { margin: 0 0 8px; font-family: var(--mono); font-weight: 500; font-size: 11px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
+.syncbox label { display: block; margin-top: 12px; font-size: 13px; color: var(--muted); }
+/* Inputs must stay selectable and typable although the page as a whole is not. */
+.syncbox input { display: block; width: 100%; box-sizing: border-box; margin-top: 4px; padding: 10px; font: inherit; font-family: var(--mono); font-size: 14px; color: var(--fg); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; -webkit-user-select: text; user-select: text; touch-action: manipulation; }
+.syncstatus { min-height: 1.4em; margin: 12px 0 0; font-size: 14px; }
+.syncbtns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.syncbtns button { min-height: 44px; padding: 0 16px; border-radius: 10px; font-weight: 600; background: var(--paper); border: 1px solid var(--line); }
+.syncbtns .primary { background: var(--chip-on); color: var(--chip-on-fg); border-color: var(--chip-on); }
 .tally { margin-left: auto; font-family: var(--mono); font-size: 13px; color: var(--muted); }
 
 .drills { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; flex: none; }
@@ -145,6 +161,7 @@ button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
     <div class="brand">Free<i>Hand</i></div>
     <nav class="tabs" id="tabs" role="tablist" aria-label="Sections"></nav>
     <div class="tally" id="tally"></div>
+    <button id="gear" type="button" class="gear" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
   </header>
   <div class="drills" id="drills" role="group" aria-label="Exercises"></div>
   <main class="work">
@@ -170,6 +187,16 @@ button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
     <aside class="panel" id="panel" aria-live="polite"></aside>
   </main>
 </div>
+<dialog id="syncbox" class="syncbox">
+  <h2>Settings</h2>
+  <h3>Saving and sync</h3>
+  <p id="synccount" class="how"></p>
+  <p class="how">Every checked drawing is saved on this device. With a private GitHub repo and a token, it is also copied there automatically.</p>
+  <label>Repo<input id="syncrepo" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="mantindjan/freehand-data"></label>
+  <label>Token<input id="synctoken" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="github_pat_…"></label>
+  <p id="syncstatus" class="syncstatus" aria-live="polite"></p>
+  <div class="syncbtns"><button id="syncclose" type="button">Close</button><button id="syncsave" type="button" class="primary">Save and sync</button></div>
+</dialog>
 <script type="module" src="ui.js"></script>
 </body>
 </html>

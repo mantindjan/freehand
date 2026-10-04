@@ -5,7 +5,7 @@
    stale version from sticking. */
 const CACHE = 'freehand-files-v1';
 // Everything the page needs, relative to this file. A page test fails if a file in public/ is missing here.
-const FILES = ['./', 'index.html', 'ui.js', 'engine.js', 'drills.js', 'canvas.js', 'manifest.webmanifest', 'icon-180.png', 'icon-512.png',
+const FILES = ['./', 'index.html', 'ui.js', 'engine.js', 'drills.js', 'canvas.js', 'store.js', 'sync.js', 'manifest.webmanifest', 'icon-180.png', 'icon-512.png',
   'fonts/bricolage-grotesque.woff2', 'fonts/instrument-sans.woff2', 'fonts/ibm-plex-mono-400.woff2', 'fonts/ibm-plex-mono-500.woff2'];
 const NETWORK_WAIT_MS = 4000; // a dead-slow connection should not leave a blank screen
 
