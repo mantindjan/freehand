@@ -17,7 +17,7 @@
    Light = layout paper, blue pencil for what is given, carmine pencil for corrections. Dark = green cutting mat, chalk lines. */
 :root {
   --bg: #e6eae6; --paper: #fbfbf7; --panel: #f1f4f0; --fg: #23272b; --muted: #636b70; --line: #cdd4ce;
-  --ink: #262a30; --blue: #2779b8; --red: #d0244d; --chip: #e1e6e1; --chip-on: #23272b; --chip-on-fg: #fbfbf7;
+  --ink: #262a30; --sketch: #8a6fd1; --blue: #2779b8; --red: #d0244d; --chip: #e1e6e1; --chip-on: #23272b; --chip-on-fg: #fbfbf7;
   --good: #2c8155; --warn: #b3730c; --bad: #c8343d;
   --display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
   --ui: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
@@ -25,11 +25,11 @@
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg: #0f1f1b; --paper: #183029; --panel: #142823; --fg: #ecf1e9; --muted: #9cb2a8; --line: #2d4a41;
-  --ink: #f1f4ea; --blue: #7ec3ee; --red: #ff7f96; --chip: #20392f; --chip-on: #ecf1e9; --chip-on-fg: #142823;
+  --ink: #f1f4ea; --sketch: #c3a9ff; --blue: #7ec3ee; --red: #ff7f96; --chip: #20392f; --chip-on: #ecf1e9; --chip-on-fg: #142823;
   --good: #71d49b; --warn: #efc162; --bad: #ff8d80; color-scheme: dark } }
 :root[data-theme="dark"] {
   --bg: #0f1f1b; --paper: #183029; --panel: #142823; --fg: #ecf1e9; --muted: #9cb2a8; --line: #2d4a41;
-  --ink: #f1f4ea; --blue: #7ec3ee; --red: #ff7f96; --chip: #20392f; --chip-on: #ecf1e9; --chip-on-fg: #142823;
+  --ink: #f1f4ea; --sketch: #c3a9ff; --blue: #7ec3ee; --red: #ff7f96; --chip: #20392f; --chip-on: #ecf1e9; --chip-on-fg: #142823;
   --good: #71d49b; --warn: #efc162; --bad: #ff8d80; color-scheme: dark }
 
 html, body { height: 100%; }
@@ -61,6 +61,15 @@ button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .tools button { pointer-events: auto; min-height: 46px; padding: 0 18px; border-radius: 10px; font-weight: 600; background: var(--panel); border: 1px solid var(--line); }
 .tools button:disabled { opacity: 0.4; cursor: default; }
 .tools .gap { flex: 1; }
+/* Pen switch: sketch (drafting, not marked), final (the answer), eraser. Joined so it reads as one control. */
+.pens { display: flex; pointer-events: auto; }
+.pens button { border-radius: 0; margin-left: -1px; padding: 0 14px; }
+.pens button:first-child { border-radius: 10px 0 0 10px; margin-left: 0; }
+.pens button:last-child { border-radius: 0 10px 10px 0; }
+.pens button[aria-pressed="true"] { background: var(--chip-on); color: var(--chip-on-fg); border-color: var(--chip-on); }
+.pens .sw { display: inline-block; width: 16px; margin-right: 7px; vertical-align: middle; border-radius: 2px; background: var(--ink); height: 3px; }
+.pens [data-tool="sketch"] .sw { background: var(--sketch); height: 2px; }
+.pens [data-tool="final"][aria-pressed="true"] .sw { background: var(--chip-on-fg); }
 .tools .primary { background: var(--chip-on); color: var(--chip-on-fg); border-color: var(--chip-on); min-width: 112px; }
 
 .panel { min-height: 0; min-width: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; -webkit-user-select: text; user-select: text; }
@@ -99,7 +108,7 @@ button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 }
 @media (max-width: 520px) {
   .brand { font-size: 20px; } .tabs button { padding: 8px 10px; font-size: 15px; } .tally { width: 100%; margin-left: 0; display: none; }
-  .task { font-size: 15px; } .tools button { padding: 0 13px; } .tools .primary { min-width: 88px; }
+  .task { font-size: 15px; } .tools { flex-wrap: wrap-reverse; } .tools button { padding: 0 13px; } .pens button { padding: 0 10px; } .tools .primary { min-width: 88px; }
 }
 </style>
 </head>
@@ -118,6 +127,11 @@ button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
       <div class="tools">
         <button id="undo" type="button">Undo</button>
         <button id="clear" type="button">Clear</button>
+        <span class="pens" role="group" aria-label="Pen">
+          <button type="button" data-tool="sketch" aria-pressed="false"><i class="sw"></i>Sketch</button>
+          <button type="button" data-tool="final" aria-pressed="true"><i class="sw"></i>Final</button>
+          <button type="button" data-tool="erase" aria-pressed="false">Eraser</button>
+        </span>
         <span class="gap"></span>
         <button id="again" type="button" hidden>Again</button>
         <button id="go" type="button" class="primary">Check</button>

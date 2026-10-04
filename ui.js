@@ -12,7 +12,7 @@ import { DRILLS } from './drills.js';
   const optsOf = d => { const o = {}, sv = saved.opts[grp(d)] || {}; for (const op of d.opts) o[op.key] = op.choices.some(c => c[0] === sv[op.key]) ? sv[op.key] : op.def; return o; };
 
   const C = {};
-  function readColors() { const cs = getComputedStyle(document.documentElement); for (const k of ['ink', 'blue', 'red', 'muted', 'paper', 'line']) C[k] = cs.getPropertyValue('--' + k).trim(); }
+  function readColors() { const cs = getComputedStyle(document.documentElement); for (const k of ['ink', 'sketch', 'blue', 'red', 'muted', 'paper', 'line']) C[k] = cs.getPropertyValue('--' + k).trim(); }
 
   const S = { sec: null, drill: null, spec: null, geo: null, strokes: [], result: null, gradedCount: 0, W: 0, H: 0 };
   const session = { n: 0, sum: 0 };
@@ -40,10 +40,38 @@ import { DRILLS } from './drills.js';
     if (!S.spec) return;
     S.drill.draw(g, S.geo, C);
     const n = S.result ? S.gradedCount : S.strokes.length;
-    for (let i = 0; i < n; i++) drawStroke(S.strokes[i], C.ink, 2.4);
+    // Sketch strokes go under the final ones so the answer stays readable on top of the drafting.
+    for (let i = 0; i < n; i++) if (S.strokes[i].sketch) drawStroke(S.strokes[i], C.sketch, SKETCH_W);
+    for (let i = 0; i < n; i++) if (!S.strokes[i].sketch) drawStroke(S.strokes[i], C.ink, FINAL_W);
     if (S.result && S.result.overlay) S.result.overlay(g, C);
-    for (let i = n; i < S.strokes.length; i++) drawStroke(S.strokes[i], C.muted, 2.4); // tracing over the correction
-    if (cur) drawStroke(cur, S.result ? C.muted : C.ink, 2.4);
+    for (let i = n; i < S.strokes.length; i++) drawStroke(S.strokes[i], C.muted, FINAL_W); // tracing over the correction
+    if (cur && tool !== 'erase') drawStroke(cur, S.result ? C.muted : tool === 'sketch' ? C.sketch : C.ink, tool === 'sketch' && !S.result ? SKETCH_W : FINAL_W);
+    if (cur && tool === 'erase') { const p = cur[cur.length - 1]; g.save(); g.strokeStyle = C.muted; g.lineWidth = 1; g.beginPath(); g.arc(p.x, p.y, ERASE_R, 0, 7); g.stroke(); g.restore(); }
+  }
+
+  /* Tools. 'final' strokes are the answer and are the only ones passed to the marking.
+     'sketch' strokes are drafting: thinner, in another colour, never marked.
+     'erase' removes whole strokes it touches. A sketch stroke is a normal stroke array
+     carrying sketch = true, so undo and erase treat both kinds alike. */
+  const SKETCH_W = 1.3, FINAL_W = 2.4, ERASE_R = 12;
+  let tool = 'final';
+  const finals = () => S.strokes.filter(st => !st.sketch);
+  function setTool(t) { tool = t; for (const b of document.querySelectorAll('[data-tool]')) b.setAttribute('aria-pressed', b.dataset.tool === t); }
+  // Distance from p to the stroke's polyline, so a fast stroke with sparse points is still hit.
+  function touches(st, p) {
+    if (st.length === 1) return Math.hypot(st[0].x - p.x, st[0].y - p.y) <= ERASE_R;
+    for (let i = 1; i < st.length; i++) {
+      const a = st[i - 1], b = st[i], dx = b.x - a.x, dy = b.y - a.y, L2 = dx * dx + dy * dy;
+      const t = L2 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / L2)) : 0;
+      if (Math.hypot(a.x + t * dx - p.x, a.y + t * dy - p.y) <= ERASE_R) return true;
+    }
+    return false;
+  }
+  // Marked strokes are frozen once a result is shown (the result describes them), so after
+  // Check the eraser only reaches the tracing strokes drawn over the correction.
+  function eraseAt(p) {
+    const keep = S.result ? S.gradedCount : 0;
+    S.strokes = S.strokes.filter((st, i) => i < keep || !touches(st, p));
   }
 
   /* pen input: one contact draws; a resting palm is dropped as soon as the pen moves */
@@ -54,19 +82,19 @@ import { DRILLS } from './drills.js';
     if ((penSeen && e.pointerType === 'touch') || e.button > 0) return;
     if (e.pointerType === 'touch' && Math.max(e.width || 0, e.height || 0) > 90) return; // palm-sized contact
     if (active != null) { if (cur && FH.pathLen(cur) < 10) ignored.add(active); else return; } // the first contact never moved: it was the hand
-    active = e.pointerId; cur = [at(e)]; try { pad.setPointerCapture(e.pointerId); } catch (err) { /* not capturable */ }
+    active = e.pointerId; cur = [at(e)]; if (tool === 'erase') eraseAt(cur[0]); try { pad.setPointerCapture(e.pointerId); } catch (err) { /* not capturable */ }
     e.preventDefault(); render();
   });
   pad.addEventListener('pointermove', e => {
     if (e.pointerId !== active || !cur) return;
     const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
-    for (const ev of (evs.length ? evs : [e])) { const p = at(ev), q = cur[cur.length - 1]; if (Math.hypot(p.x - q.x, p.y - q.y) >= 0.8) cur.push(p); }
+    for (const ev of (evs.length ? evs : [e])) { const p = at(ev), q = cur[cur.length - 1]; if (Math.hypot(p.x - q.x, p.y - q.y) >= 0.8) { cur.push(p); if (tool === 'erase') eraseAt(p); } }
     render();
   });
   const end = (e, keep) => {
     if (ignored.delete(e.pointerId)) return;
     if (e.pointerId !== active) return;
-    if (keep && cur && cur.length) S.strokes.push(cur);
+    if (keep && cur && cur.length && tool !== 'erase') { if (tool === 'sketch' && !S.result) cur.sketch = true; S.strokes.push(cur); }
     cur = null; active = null; render(); buttons();
   };
   pad.addEventListener('pointerup', e => end(e, true));
@@ -74,25 +102,26 @@ import { DRILLS } from './drills.js';
   pad.addEventListener('contextmenu', e => e.preventDefault());
 
   function check() {
-    if (!S.strokes.length) return;
-    let r; try { r = S.drill.grade(S.strokes, S.spec, S.geo); } catch (err) { r = { score: null, title: 'Could not read this drawing', sub: 'Clear the sheet and try once more.', rows: [], notes: [] }; }
+    if (!finals().length) return;
+    let r; try { r = S.drill.grade(finals(), S.spec, S.geo); } catch (err) { r = { score: null, title: 'Could not read this drawing', sub: 'Clear the sheet and try once more.', rows: [], notes: [] }; }
     S.result = r; S.gradedCount = S.strokes.length;
     if (r.score != null) { const h = saved.hist[S.drill.id] = (saved.hist[S.drill.id] || []).concat(r.score).slice(-30); session.n++; session.sum += r.score; save(); }
     render(); renderPanel(); buttons(); panel.scrollTop = 0;
   }
   function buttons() {
     const done = !!S.result, go = $('go');
-    go.textContent = done ? (S.drill.free ? 'New sheet' : 'Next') : 'Check'; go.disabled = !done && !S.strokes.length;
+    go.textContent = done ? (S.drill.free ? 'New sheet' : 'Next') : 'Check'; go.disabled = !done && !finals().length;
     $('again').hidden = !done || !!S.drill.free; $('undo').disabled = !S.strokes.length; $('clear').disabled = !S.strokes.length && !done;
     $('tally').textContent = session.n ? `This sitting: ${session.n} checked, average ${Math.round(session.sum / session.n)}` : 'This sitting: nothing checked yet';
   }
-  $('go').addEventListener('click', () => { if (S.result) return newPrompt(); if (!S.strokes.length) return; $('go').textContent = 'Reading…'; $('go').disabled = true; setTimeout(check, 30); });
+  $('go').addEventListener('click', () => { if (S.result) return newPrompt(); if (!finals().length) return; $('go').textContent = 'Reading…'; $('go').disabled = true; setTimeout(check, 30); });
   $('again').addEventListener('click', () => { S.strokes = []; S.result = null; render(); renderPanel(); buttons(); });
   $('clear').addEventListener('click', () => { S.strokes = []; S.result = null; render(); renderPanel(); buttons(); });
   $('undo').addEventListener('click', () => {
     if (S.result && S.strokes.length <= S.gradedCount) S.result = null; else S.strokes.pop();
     render(); renderPanel(); buttons();
   });
+  for (const b of document.querySelectorAll('[data-tool]')) b.addEventListener('click', () => setTool(b.dataset.tool));
   document.addEventListener('keydown', e => { if (e.key === 'Enter') $('go').click(); else if (e.key === 'z' || e.key === 'Backspace') $('undo').click(); });
 
   const tier = s => s >= 80 ? 'good' : s >= 55 ? 'warn' : 'bad';
@@ -145,5 +174,5 @@ import { DRILLS } from './drills.js';
   open(DRILLS.sections.some(s => s.id === hash) ? hash : saved.sec);
   if (window.ResizeObserver) new ResizeObserver(resize).observe(stage); else window.addEventListener('resize', resize);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (S.spec && !S.strokes.length && !S.result) layout(); render(); });
-  window.__fh = { S, check, open, FH }; // handle for the page tests (modules have no globals to reach otherwise)
+  window.__fh = { S, check, open, FH, setTool }; // handle for the page tests (modules have no globals to reach otherwise)
 })();
