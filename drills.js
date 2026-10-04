@@ -437,15 +437,38 @@ export const DRILLS = (function () {
   }
   const cubeTable = {
     id: 'cubetable', name: 'The table', reference: true,
-    how: 'Krenz’s 16 cubes: four turns across, four camera heights down. The thin cube in each cell is the face-on cube of that row, on the same centre. Nothing is marked here; draw over the sheet to trace it.',
+    how: 'Krenz’s 16 cubes: four turns across, four camera heights down. The thin cube in each cell is the face-on cube of that row, on the same centre. Tap a cube to see it large, tap again to come back. Nothing is marked here; draw over the sheet to trace it.',
     opts: [viewOpt, distOpt],
-    spec(o) { return { below: o.view === 'below', dist: o.dist }; },
+    // focus is the one cube shown large ({turn, cam}), or null for the whole table. A set-up change
+    // (stay) keeps it, so the same cube can be compared from below or at another distance.
+    spec(o, prev, stay) { return { below: o.view === 'below', dist: o.dist, focus: stay && prev ? prev.focus : null }; },
     lay(s, A) { // a square grid with a margin on the left and top for the row and column names
       const padL = 46, padT = 26, cell = Math.min((A.w - padL) / 4, (A.h - padT) / 4), x0 = A.cx - (4 * cell + padL) / 2 + padL, y0 = A.cy - (4 * cell + padT) / 2 + padT;
-      return { cell, x0, y0, sc: cell * 0.58, below: s.below, k: KS[s.dist] };
+      return { A, cell, x0, y0, sc: cell * 0.58, below: s.below, k: KS[s.dist], focus: s.focus };
     },
-    task(s) { return `The 16 cubes, ${s.below ? 'seen from below' : 'seen from above'}, ${DS[s.dist]}.`; },
+    task(s) {
+      const view = `${s.below ? 'seen from below' : 'seen from above'}, ${DS[s.dist]}`;
+      return s.focus ? `Turn ${turnLabel(s.focus.turn)}, camera ${camLabel(s.focus.cam).toLowerCase()}, ${s.focus.cam ? view : DS[s.dist]}. Tap the sheet to go back to all 16.` : `The 16 cubes, ${view}. Tap a cube to see it large.`;
+    },
+    // A tap (not a stroke) on the table opens the cube under it; a tap on the large cube goes back.
+    // Returns the new prompt, or null when the tap hit nothing and should stay an ordinary dot.
+    tap(s, G, p) {
+      if (s.focus) return { ...s, focus: null };
+      const c = Math.floor((p.x - G.x0) / G.cell), r = Math.floor((p.y - G.y0) / G.cell);
+      return c >= 0 && c < 4 && r >= 0 && r < 4 ? { ...s, focus: { turn: TURNS[c], cam: CAMS[r] } } : null;
+    },
     draw(g, G, C) {
+      if (G.focus) { // one cube, as large as the sheet allows, with a small map of where it sits in the table
+        const A = G.A, cam = G.focus.cam, m3 = FH.cubeModel(G.focus.turn, G.below ? -cam : cam, G.k);
+        // Sized so the cube and its face-on companion together fill most of the sheet.
+        const b = FH.bbox(m3.V.concat(FH.cubeModel(0, m3.pitch, G.k).V)), sc = 0.88 * Math.min(A.w / (b.x1 - b.x0), A.h / (b.y1 - b.y0));
+        drawCell(g, m3, v => ({ x: A.cx + sc * (v.x - b.cx), y: A.cy + sc * (v.y - b.cy) }), C.blue, C.muted);
+        const m = 15, mx = A.x0, my = A.y0 + 4;
+        CAMS.forEach((cm, r) => TURNS.forEach((t, c) => { const on = t === G.focus.turn && cm === cam; g.save(); g.fillStyle = on ? C.blue : C.line; g.fillRect(mx + c * m, my + r * m, m - 3, m - 3); g.restore(); }));
+        g.save(); g.fillStyle = C.muted; g.font = '600 15px "Instrument Sans", system-ui, sans-serif'; g.textBaseline = 'middle';
+        g.fillText(`${turnLabel(G.focus.turn)} · ${camLabel(cam)}`, mx + 4 * m + 8, my + 2 * m - 2); g.restore();
+        return;
+      }
       TURNS.forEach((t, c) => D.label(g, t + '°', G.x0 + (c + 0.5) * G.cell, G.y0 - 12, C.muted));
       CAMS.forEach((cam, r) => {
         D.label(g, cam ? cam + '°' : 'Level', G.x0 - 24, G.y0 + (r + 0.5) * G.cell, C.muted);

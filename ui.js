@@ -103,6 +103,12 @@ import { DEFAULT_REPO, syncConfig, setSyncConfig, syncState, sync } from './sync
   const end = (e, keep) => {
     if (ignored.delete(e.pointerId)) return;
     if (e.pointerId !== active) return;
+    // Some sheets react to a tap (the table opens the cube under it). A tap is a contact that barely
+    // moved; it changes what is shown and leaves no mark. Strokes already on the sheet stay.
+    if (keep && cur && S.drill.tap && FH.pathLen(cur) < 8) {
+      const next = S.drill.tap(S.spec, S.geo, cur[0]);
+      if (next) { S.spec = next; taskEl.textContent = S.drill.task(S.spec); layout(); cur = null; active = null; render(); buttons(); return; }
+    }
     if (keep && cur && cur.length && tool !== 'erase') { if (tool === 'sketch' && !S.result) { cur.sketch = true; if (!showSketch) setSketchShown(true); } S.strokes.push(cur); }
     cur = null; active = null; render(); buttons();
   };
