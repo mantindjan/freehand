@@ -228,6 +228,36 @@ export const DRILLS = (function () {
     }
   };
 
+  /* Set-up follows Krenz's 16-cube sheet: four turns, four camera rows. The sheet is drawn at average
+     distance (front pillar to back pillar about 5:4), so that is the default. */
+  const TURNS = [0, 22.5, 45, 67.5], CAMS = [0, 22.5, 45, 67.5];
+  const turnLabel = t => t ? t + '°' : '0° face-on', camLabel = c => c ? c + '°' : 'Level';
+  // The Y and Complete the cube leave out the face-on column: its left arm points straight back and
+  // shrinks to a stub, so there is no Y to draw.
+  const cubeOptsFor = turns => [
+    { key: 'turn', label: 'Turn', def: 'r', choices: [['r', 'Random']].concat(turns.map(t => [String(t), turnLabel(t)])) },
+    { key: 'cam', label: 'Camera', def: 'r', choices: [['r', 'Random']].concat(CAMS.map(c => [String(c), camLabel(c)])) },
+    { key: 'view', label: 'Seen from', def: 'above', choices: [['above', 'Above'], ['below', 'Below'], ['either', 'Either']] },
+    { key: 'dist', label: 'Distance', def: 'avg', choices: [['far', 'Far'], ['avg', 'Average'], ['close', 'Close'], ['r', 'Random']] }];
+  const cubeOpts = cubeOptsFor(TURNS), yOpts = cubeOptsFor(TURNS.slice(1));
+  const viewOpt = { key: 'view', label: 'Seen from', def: 'above', choices: [['above', 'Above'], ['below', 'Below']] };
+  const distOpt = { key: 'dist', label: 'Distance', def: 'avg', choices: [['far', 'Far'], ['avg', 'Average'], ['close', 'Close']] };
+  const KS = { far: 0.05, avg: 0.2, close: 0.5 }, DW = { far: 'far away (20 cube-lengths)', avg: 'at average distance (5 cube-lengths)', close: 'close (2 cube-lengths)' };
+  const specFor = turns => o => {
+    const dist = o.dist === 'r' ? pick(['far', 'avg', 'close']) : o.dist, cam = o.cam === 'r' ? pick(CAMS) : +o.cam;
+    // A level camera is neither above nor below.
+    const below = cam > 0 && (o.view === 'below' || (o.view === 'either' && Math.random() < 0.5));
+    return { turn: o.turn === 'r' ? pick(turns) : +o.turn, cam, below, dist };
+  };
+  const cubeSpec = specFor(TURNS), ySpec = specFor(TURNS.slice(1));
+  const poseOf = s => FH.cubeModel(s.turn, s.below ? -s.cam : s.cam, KS[s.dist]);
+  const camText = s => s.cam ? `seen from ${s.cam}° ${s.below ? 'below' : 'above'}` : 'seen level';
+  // The task line must fit on one line of the sheet, so it uses the short distance words.
+  const DS = { far: 'far', avg: 'average distance', close: 'close' };
+  const poseText = s => `Cube ${s.turn ? `turned ${s.turn}°` : 'face-on (turn 0°)'}, ${camText(s)}, ${DS[s.dist]}.`;
+  const viewText = (t, p) => `turned ${t.toFixed(0)}°, ` + (Math.abs(p) < 4 ? 'seen level' : `seen from ${Math.abs(p).toFixed(0)}° ${p < 0 ? 'below' : 'above'}`);
+  // Turn 0 and turn 90 are the same picture, so a turn error is the shorter way round.
+  const turnDiff = (a, b) => ((a - b + 135) % 90) - 45;
   const cubePlace = (m, A, size) => { // scale and centre a posed cube in the drawing area
     const b = FH.bbox(m.V), sc = Math.min(size * A.U, 0.9 * A.w / (b.x1 - b.x0), 0.9 * A.h / (b.y1 - b.y0));
     return { sc, tx: A.cx - sc * b.cx, ty: A.cy - sc * b.cy };
@@ -236,7 +266,11 @@ export const DRILLS = (function () {
 
   const ellTop = {
     id: 'elltop', name: 'On a cube top', how: 'Marked on how far your ellipse runs from the true one: the circle that sits in the top face, seen in perspective.',
-    opts: [], spec() { return { turn: pick([22.5, 30, 45, 45, 60, 67.5]), pitch: pick([22.5, 30, 35, 45, 55]), k: pick([0.1, 0.2, 0.3]) }; },
+    // Same set-up as the cube exercises, without the level row: there the top face is seen edge-on.
+    opts: [{ key: 'turn', label: 'Turn', def: 'r', choices: [['r', 'Random']].concat(TURNS.map(t => [String(t), turnLabel(t)])) },
+      { key: 'cam', label: 'Camera', def: 'r', choices: [['r', 'Random']].concat(CAMS.slice(1).map(c => [String(c), camLabel(c)])) },
+      { key: 'dist', label: 'Distance', def: 'avg', choices: distOpt.choices.concat([['r', 'Random']]) }],
+    spec(o) { return { turn: o.turn === 'r' ? pick(TURNS) : +o.turn, pitch: o.cam === 'r' ? pick(CAMS.slice(1)) : +o.cam, k: KS[o.dist === 'r' ? pick(['far', 'avg', 'close']) : o.dist] }; },
     lay(s, A) { const m = FH.cubeModel(s.turn, s.pitch, s.k), P = cubePlace(m, A, 0.52); return { m, P }; },
     task() { return 'Draw the ellipse that sits in the top face and touches all four of its sides.'; },
     draw(g, G, C) { const tf = tfOf(G.P); for (const e of G.m.edges) if (e.visible) D.line(g, tf(G.m.V[e.a]), tf(G.m.V[e.b]), C.blue, 2); },
@@ -281,34 +315,6 @@ export const DRILLS = (function () {
   };
 
   /* ---------- Cube ---------- */
-  /* Set-up follows Krenz's 16-cube sheet: four turns, four camera rows. The sheet is drawn at average
-     distance (front pillar to back pillar about 5:4), so that is the default. */
-  const TURNS = [0, 22.5, 45, 67.5], CAMS = [0, 22.5, 45, 67.5];
-  const turnLabel = t => t ? t + '°' : '0° face-on', camLabel = c => c ? c + '°' : 'Level';
-  // The Y and Complete the cube leave out the face-on column: its left arm points straight back and
-  // shrinks to a stub, so there is no Y to draw.
-  const cubeOptsFor = turns => [
-    { key: 'turn', label: 'Turn', def: 'r', choices: [['r', 'Random']].concat(turns.map(t => [String(t), turnLabel(t)])) },
-    { key: 'cam', label: 'Camera', def: 'r', choices: [['r', 'Random']].concat(CAMS.map(c => [String(c), camLabel(c)])) },
-    { key: 'view', label: 'Seen from', def: 'above', choices: [['above', 'Above'], ['below', 'Below'], ['either', 'Either']] },
-    { key: 'dist', label: 'Distance', def: 'avg', choices: [['far', 'Far'], ['avg', 'Average'], ['close', 'Close'], ['r', 'Random']] }];
-  const cubeOpts = cubeOptsFor(TURNS), yOpts = cubeOptsFor(TURNS.slice(1));
-  const KS = { far: 0.05, avg: 0.2, close: 0.5 }, DW = { far: 'far away (20 cube-lengths)', avg: 'at average distance (5 cube-lengths)', close: 'close (2 cube-lengths)' };
-  const specFor = turns => o => {
-    const dist = o.dist === 'r' ? pick(['far', 'avg', 'close']) : o.dist, cam = o.cam === 'r' ? pick(CAMS) : +o.cam;
-    // A level camera is neither above nor below.
-    const below = cam > 0 && (o.view === 'below' || (o.view === 'either' && Math.random() < 0.5));
-    return { turn: o.turn === 'r' ? pick(turns) : +o.turn, cam, below, dist };
-  };
-  const cubeSpec = specFor(TURNS), ySpec = specFor(TURNS.slice(1));
-  const poseOf = s => FH.cubeModel(s.turn, s.below ? -s.cam : s.cam, KS[s.dist]);
-  const camText = s => s.cam ? `seen from ${s.cam}° ${s.below ? 'below' : 'above'}` : 'seen level';
-  // The task line must fit on one line of the sheet, so it uses the short distance words.
-  const DS = { far: 'far', avg: 'average distance', close: 'close' };
-  const poseText = s => `Cube ${s.turn ? `turned ${s.turn}°` : 'face-on (turn 0°)'}, ${camText(s)}, ${DS[s.dist]}.`;
-  const viewText = (t, p) => `turned ${t.toFixed(0)}°, ` + (Math.abs(p) < 4 ? 'seen level' : `seen from ${Math.abs(p).toFixed(0)}° ${p < 0 ? 'below' : 'above'}`);
-  // Turn 0 and turn 90 are the same picture, so a turn error is the shorter way round.
-  const turnDiff = (a, b) => ((a - b + 135) % 90) - 45;
   function describeEdge(r) {
     const bits = [];
     if (Math.abs(r.dAng) >= 2) bits.push(`${Math.abs(r.dAng).toFixed(0)}° ${r.dAng > 0 ? 'clockwise' : 'anticlockwise'}`);
@@ -425,8 +431,7 @@ export const DRILLS = (function () {
   const cubeTable = {
     id: 'cubetable', name: 'The table', reference: true,
     how: 'Krenz’s 16 cubes: four turns across, four camera heights down. The thin cube in each cell is the face-on cube of that row, on the same centre. Nothing is marked here; draw over the sheet to trace it.',
-    opts: [{ key: 'view', label: 'Seen from', def: 'above', choices: [['above', 'Above'], ['below', 'Below']] },
-      { key: 'dist', label: 'Distance', def: 'avg', choices: [['far', 'Far'], ['avg', 'Average'], ['close', 'Close']] }],
+    opts: [viewOpt, distOpt],
     spec(o) { return { below: o.view === 'below', dist: o.dist }; },
     lay(s, A) { // a square grid with a margin on the left and top for the row and column names
       const padL = 46, padT = 26, cell = Math.min((A.w - padL) / 4, (A.h - padT) / 4), x0 = A.cx - (4 * cell + padL) / 2 + padL, y0 = A.cy - (4 * cell + padT) / 2 + padT;
@@ -447,17 +452,18 @@ export const DRILLS = (function () {
   const cube16 = {
     id: 'cube16', name: '16 cubes', how: 'The sheet, one cube at a time. Pick a turn and a camera to practise one cube, or leave either on All to step through, left to right and top to bottom. Each is marked like a named cube; the correction also shows the thin face-on cube of its row.',
     opts: [{ key: 'turn', label: 'Turn (column)', def: 'all', choices: [['all', 'All']].concat(TURNS.map(t => [String(t), turnLabel(t)])) },
-      { key: 'cam', label: 'Camera, from above (row)', def: 'all', choices: [['all', 'All']].concat(CAMS.map(c => [String(c), camLabel(c)])) },
+      { key: 'cam', label: 'Camera (row)', def: 'all', choices: [['all', 'All']].concat(CAMS.map(c => [String(c), camLabel(c)])) },
+      viewOpt, distOpt,
       { key: 'model', label: 'Small picture', def: 'show', choices: [['show', 'Shown'], ['hide', 'From memory']] }],
     // Steps to the cell after the previous one within the chosen column and row. With both chosen
     // the list is one cube, which then repeats. On a set-up change (stay) the current cube is kept
     // if it is still among the chosen ones, so switching the picture on or off does not move on.
     spec(o, prev, stay) {
       const list = CELLS.filter(c => (o.turn === 'all' || c.turn === +o.turn) && (o.cam === 'all' || c.cam === +o.cam)), at = prev ? list.findIndex(c => c.turn === prev.turn && c.cam === prev.cam) : -1, n = stay && at >= 0 ? at : (at + 1) % list.length;
-      return { turn: list[n].turn, cam: list[n].cam, below: false, dist: 'avg', n: n + 1, total: list.length, show: o.model !== 'hide' };
+      return { turn: list[n].turn, cam: list[n].cam, below: o.view === 'below' && list[n].cam > 0, dist: o.dist, n: n + 1, total: list.length, show: o.model !== 'hide' };
     },
     lay(s, A) { const m = poseOf(s), sc = 0.2 * A.U; return { m, show: s.show, tf: v => ({ x: A.x1 - 0.85 * sc + sc * v.x, y: A.y0 + 0.9 * sc + sc * v.y }) }; }, // the picture, top right
-    task(s) { return (s.total > 1 ? `Cube ${s.n} of ${s.total}: ` : 'Cube: ') + `turn ${turnLabel(s.turn)}, camera ${s.cam ? s.cam + '° above' : 'level'}. Draw it whole, hidden edges too.`; },
+    task(s) { return (s.total > 1 ? `Cube ${s.n} of ${s.total}: ` : 'Cube: ') + `turn ${turnLabel(s.turn)}, camera ${s.cam ? `${s.cam}° ${s.below ? 'below' : 'above'}` : 'level'}, ${DS[s.dist]}. Draw it whole, hidden edges too.`; },
     draw(g, G, C) { if (G.show) drawCell(g, G.m, G.tf, C.blue, C.muted); },
     grade(strokes, s) { return gradeNamed(strokes, s, true); }
   };
