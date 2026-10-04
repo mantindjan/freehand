@@ -92,9 +92,11 @@ export const DRILLS = (function () {
   };
 
   const measure = {
-    id: 'measure', name: 'Free measure', free: true, how: 'Draw lines and tick them anywhere. You get their lengths against the longest, their directions, and what the ticks divide them into.',
-    opts: [], spec() { return {}; }, lay() { return {}; }, task() { return 'Draw any lines, and tick them if you like. Check tells you what you made.'; }, draw() {},
-    grade(strokes) {
+    id: 'measure', name: 'Free measure', free: true, how: 'Draw lines and tick them anywhere. You get their lengths against the longest, their directions, and what the ticks divide them into. A mark at each end of a line sets where the measuring starts and stops, so the line may run past them.',
+    opts: [{ key: 'parts', label: 'Equal parts', def: 'auto', choices: [['auto', 'Auto']].concat([2, 3, 4, 5, 6, 7, 8].map(n => [String(n), String(n)])) }],
+    spec(o) { return { parts: o.parts === 'auto' ? 0 : +o.parts }; }, lay() { return {}; },
+    task(s) { return s.parts ? `Draw a line and divide it into ${s.parts} equal parts. A mark at each end is fine.` : 'Draw any lines, and tick them if you like. Check tells you what you made.'; }, draw() {},
+    grade(strokes, spec) {
       const all = strokes.map(s => ({ s, l: FH.strokeLine(s) })).filter(x => x.l), maxL = Math.max(0, ...all.map(x => x.l.len));
       if (maxL < 30) return need('No lines found');
       const lines = all.filter(x => x.l.len >= 0.25 * maxL).map(x => x.l).slice(0, 6), ticks = strokes.filter(s => { const l = FH.strokeLine(s); return !l || l.len < 0.25 * maxL; });
@@ -107,15 +109,25 @@ export const DRILLS = (function () {
         let v = i === 0 ? 'longest, taken as 1' : (() => { const r = l.len / lines[0].len, f = FH.nearestFraction(r, 8); return `${r.toFixed(2)} of A` + (f.e < 0.03 ? `, close to ${f.n}/${f.d}` : ''); })();
         v += `; ${tilt.toFixed(0)}° from level, towards ${clockText(up)}`;
         rows.push({ k: 'Line ' + names[i], v });
-        const ts = [];
+        let ts = [];
         for (const sk of ticks) { let b = null; for (const q of sk) { const dx = q.x - l.a.x, dy = q.y - l.a.y, d = Math.abs(-dx * uy + dy * ux); if (!b || d < b.d) b = { d, t: (dx * ux + dy * uy) / l.len }; }
-          if (b && b.d < 0.08 * l.len && b.t > 0.02 && b.t < 0.98) ts.push(b.t); }
-        if (ts.length) {
-          ts.sort((a, b) => a - b); const n = ts.length + 1;
-          if (ts.length === 1) { const f = FH.nearestFraction(ts[0], 8); rows.push({ k: 'Mark on ' + names[i], v: `at ${pct(ts[0])}; nearest simple split is ${f.n}/${f.d} (${pct(f.v, 1)})`, s: st(f.e, 0.012, 0.03) }); marks.push({ l, ux, uy, at: [f.v] }); }
-          else { const errs = ts.map((t, k) => t - (k + 1) / n), worst = Math.max(...errs.map(Math.abs));
-            rows.push({ k: 'Marks on ' + names[i], v: `${ts.map(t => (t * 100).toFixed(0)).join(', ')}%; as ${n} equal parts the worst mark is ${pct(worst, 1)} off`, s: st(worst, 0.012, 0.03) }); marks.push({ l, ux, uy, at: ts.map((t, k) => (k + 1) / n) }); }
-        }
+          if (b && b.d < 0.08 * l.len && b.t > -0.03 && b.t < 1.03) ts.push(b.t); }
+        if (!ts.length) return;
+        ts.sort((a, b) => a - b);
+        // Where the measured span starts and stops. People mark both ends and let the line run past
+        // them, so a mark near each end of the stroke is an end mark, not a division. With a part
+        // count asked for, the number of marks settles it: N + 1 marks include the two ends, N - 1 do not.
+        const N = spec.parts, found = ts.length;
+        let ends = found >= 2 && ts[0] < 0.1 && ts[found - 1] > 0.9, asked = false;
+        if (N && found === N + 1) { ends = true; asked = true; } else if (N && found === N - 1 && !ends) asked = true; // N - 1 marks that sit on the ends are a different split, not this one
+        const t0 = ends ? ts[0] : 0, t1 = ends ? ts[found - 1] : 1, at = t => t0 + t * (t1 - t0);
+        if (ends) ts = ts.slice(1, -1);
+        const us = ts.map(t => (t - t0) / (t1 - t0)), n = us.length + 1, span = ends ? 'between your end marks' : 'of the whole line';
+        if (N && !asked) rows.push({ k: 'Marks on ' + names[i], v: `found ${found} mark${found > 1 ? 's' : ''}; ${N} parts take ${N - 1}, or ${N + 1} with a mark at each end. Read as ${n} part${n > 1 ? 's' : ''} instead`, s: 'bad' });
+        if (!us.length) { if (ends) marks.push({ l, ux, uy, at: [t0, t1] }); return; }
+        if (us.length === 1 && !asked) { const f = FH.nearestFraction(us[0], 8); rows.push({ k: 'Mark on ' + names[i], v: `at ${pct(us[0])} ${span}; nearest simple split is ${f.n}/${f.d} (${pct(f.v, 1)})`, s: st(f.e, 0.012, 0.03) }); marks.push({ l, ux, uy, at: [at(f.v)] }); }
+        else { const errs = us.map((u, k) => u - (k + 1) / n), worst = Math.max(...errs.map(Math.abs));
+          rows.push({ k: 'Marks on ' + names[i], v: `${n} equal parts ${span}: marks at ${us.map(u => (u * 100).toFixed(0)).join(', ')}%, worst is ${pct(worst, 1)} off`, s: st(worst, 0.012, 0.03) }); marks.push({ l, ux, uy, at: us.map((u, k) => at((k + 1) / n)) }); }
       });
       if (lines.length >= 2) { const a = lines[0], b = lines[1]; let an = Math.abs(angDiff(Math.atan2(a.b.y - a.a.y, a.b.x - a.a.x) / DEG, Math.atan2(b.b.y - b.a.y, b.b.x - b.a.x) / DEG)); if (an > 90) an = 180 - an; rows.push({ k: 'Angle A to B', v: an.toFixed(0) + '°' }); }
       return { score: null, title: `${lines.length} line${lines.length > 1 ? 's' : ''} measured`, sub: marks.length ? 'Red ticks show the exact split nearest to your marks.' : '', rows, notes: [],
