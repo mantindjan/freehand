@@ -53,7 +53,7 @@ import { DRILLS } from './drills.js';
      'sketch' strokes are drafting: thinner, in another colour, never marked.
      'erase' removes whole strokes it touches. A sketch stroke is a normal stroke array
      carrying sketch = true, so undo and erase treat both kinds alike. */
-  const SKETCH_W = 1.3, FINAL_W = 2.4, ERASE_R = 12;
+  const SKETCH_W = 0.9, FINAL_W = 1.8, ERASE_R = 12;
   let tool = 'final';
   const finals = () => S.strokes.filter(st => !st.sketch);
   function setTool(t) { tool = t; for (const b of document.querySelectorAll('[data-tool]')) b.setAttribute('aria-pressed', b.dataset.tool === t); }
