@@ -162,10 +162,20 @@ import { DRILLS } from './drills.js';
     $('tabs').innerHTML = DRILLS.sections.map(s => `<button type="button" role="tab" data-s="${s.id}" aria-selected="${s === S.sec}">${s.name}</button>`).join('');
     $('drills').innerHTML = S.sec.drills.map(d => `<button type="button" data-d="${d.id}" aria-pressed="${d === S.drill}">${d.name}${d.free ? '<span class="free">free</span>' : ''}</button>`).join('');
   }
+  // Every exercise keeps its own sheet: the prompt, the strokes and any marking. Leaving an exercise
+  // puts its sheet aside and coming back restores it, so looking something up on the table or in
+  // another section never costs a drawing. A sheet is only emptied by Clear, Again or Next.
+  // Kept in memory only: a reload starts with blank sheets.
+  const sheets = {};
   function open(secId, drillId) {
+    if (S.drill && S.spec) sheets[S.drill.id] = { spec: S.spec, strokes: S.strokes, result: S.result, gradedCount: S.gradedCount };
     S.sec = DRILLS.sections.find(s => s.id === secId) || DRILLS.sections[0];
     S.drill = S.sec.drills.find(d => d.id === (drillId || saved.last[S.sec.id])) || S.sec.drills[0];
-    saved.last[S.sec.id] = S.drill.id; saved.sec = S.sec.id; save(); S.spec = null; renderNav(); newPrompt();
+    saved.last[S.sec.id] = S.drill.id; saved.sec = S.sec.id; save(); renderNav();
+    const kept = sheets[S.drill.id];
+    if (!kept) { S.spec = null; return newPrompt(); }
+    Object.assign(S, kept);
+    taskEl.textContent = S.drill.task(S.spec); layout(); render(); renderPanel(); buttons();
   }
   $('tabs').addEventListener('click', e => { const b = e.target.closest('button[data-s]'); if (b) open(b.dataset.s); });
   $('drills').addEventListener('click', e => { const b = e.target.closest('button[data-d]'); if (b) open(S.sec.id, b.dataset.d); });
