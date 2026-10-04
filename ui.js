@@ -180,7 +180,9 @@ import { DEFAULT_REPO, syncConfig, setSyncConfig, syncState, sync } from './sync
   document.addEventListener('keydown', e => { if (box.open) return; if (e.key === 'Enter') $('go').click(); else if (e.key === 'z' || e.key === 'Backspace') $('undo').click(); });
 
   // Four bands. Good is a pass, not a warning, so it is not drawn in amber; nothing is drawn in red.
-  const BANDS = [[90, 'top', 'Outstanding'], [75, 'good', 'Excellent'], [50, 'ok', 'Good'], [0, 'warn', 'Improve']];
+  // The second entry is a CSS class on the score and the history bars: it must not be a name the
+  // layout already uses ("top" is the toolbar strip, and once pulled an Outstanding score out of the panel).
+  const BANDS = [[90, 'best', 'Outstanding'], [75, 'good', 'Excellent'], [50, 'ok', 'Good'], [0, 'warn', 'Improve']];
   const band = s => BANDS.find(b => s >= b[0]), tier = s => band(s)[1];
   function renderPanel() {
     const d = S.drill, o = optsOf(d), r = S.result; let h = '';
