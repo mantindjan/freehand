@@ -14,6 +14,41 @@ export const DRILLS = (function () {
   const fracLabel = f => ({ '0.5': 'half', '0.333': 'one third', '0.667': 'two thirds', '0.75': 'three quarters' }[f] || f + ' times');
 
   /* ---------- Proportion ---------- */
+  /* Reference sheet: where thirds, fifths and sevenths sit against the marks found by halving.
+     Halving is the one split the eye does well, so every other split is placed from those marks. */
+  const DIV_ROWS = [{ name: 'Halves, quarters, eighths', n: 8 }, { name: 'Thirds', n: 3 }, { name: 'Fifths', n: 5 }, { name: 'Sevenths', n: 7 }];
+  const fracText = (k, n) => { const g = (a, b) => b ? g(b, a % b) : a, d = g(k, n); return `${k / d}/${n / d}`; };
+  const divisions = {
+    id: 'divisions', name: 'Divisions', reference: true,
+    how: 'Thirds, fifths and sevenths against the halving marks. A step is one eighth of the line. Thirds: 1/3 is two thirds of a step past 1/4. Fifths: 1/5 is just over half a step past 1/8, and 2/5 a hair past 3/8. Sevenths: each one sits its own number of sevenths of a step past the eighth of the same number, so 1/7 is a sliver past 1/8, 2/7 a bit more past 1/4, 3/7 nearly half a step past 3/8. The other half of the line mirrors the first. Nothing is marked here; draw over the sheet to trace it.',
+    opts: [{ key: 'dir', label: 'Lines run', def: 'h', choices: [['h', 'Across'], ['v', 'Upright']] }],
+    spec(o) { return { upright: o.dir === 'v' }; },
+    lay(s, A) { return { A, upright: s.upright }; },
+    task(s) { return `Where thirds, fifths and sevenths sit against halves, quarters and eighths, on ${s.upright ? 'upright' : 'level'} lines.`; },
+    draw(g, G, C) {
+      const A = G.A, up = G.upright, rows = DIV_ROWS.length;
+      // t runs along a line (0 to 1), r is the row. Upright lines read from the bottom up, like a measured height.
+      const L = (up ? A.h : A.w) - 60, gap = (up ? A.w : A.h) / (rows + 0.4);
+      const pt = (t, r, off) => up ? { x: A.x0 + (r + 0.75) * gap + (off || 0), y: A.y1 - 30 - t * L } : { x: A.x0 + 30 + t * L, y: A.y0 + (r + 0.75) * gap + (off || 0) };
+      const text = (str, p, color, size, align) => { g.save(); g.fillStyle = color; g.font = `${size >= 15 ? 600 : 500} ${size}px "Instrument Sans", system-ui, sans-serif`; g.textAlign = align; g.textBaseline = 'middle'; g.fillText(str, p.x, p.y); g.restore(); };
+      // Guide lines from every eighth, through all the rows.
+      for (let k = 1; k < 8; k++) D.line(g, pt(k / 8, 0), pt(k / 8, rows - 1, 26), C.line, 1, k === 4 ? null : [3, 5]);
+      DIV_ROWS.forEach((row, r) => {
+        const color = r ? C.blue : C.ink;
+        D.line(g, pt(0, r), pt(1, r), C.ink, 2);
+        for (const t of [0, 1]) D.line(g, pt(t, r, -11), pt(t, r, 11), C.ink, 2);
+        for (let k = 1; k < row.n; k++) {
+          const t = k / row.n, h = r ? 13 : k === 4 ? 20 : k % 2 ? 9 : 14; // eighths: taller marks for the half and the quarters
+          D.line(g, pt(t, r, -h), pt(t, r, h), color, r ? 3 : 2);
+          const lab = pt(t, r, r ? 30 : -34);
+          text(fracText(k, row.n), up ? { x: lab.x, y: lab.y } : lab, C.muted, 14, 'center');
+        }
+        const title = up ? pt(0, r, 0) : pt(0, r, -34 - (r ? 0 : 22));
+        text(row.name, up ? { x: title.x, y: A.y1 - 8 } : { x: title.x - 30 + 4, y: title.y }, C.ink, 15, up ? 'center' : 'left');
+      });
+    }
+  };
+
   const divide = {
     id: 'divide', name: 'Divide a line', how: 'Marked on how far each mark sits from the true position, as a share of the line.',
     opts: [{ key: 'parts', label: 'Parts', def: 'r', choices: [['r', 'Random'], ['2', '2'], ['3', '3'], ['4', '4'], ['5', '5'], ['6', '6'], ['7', '7']] },
@@ -448,5 +483,5 @@ export const DRILLS = (function () {
     }
   };
 
-  return { sections: [{ id: 'proportion', name: 'Proportion', drills: [divide, ratio, clock, measure] }, { id: 'ellipse', name: 'Ellipse', drills: [ellFree, ellBox, ellTop, ellDeg] }, { id: 'cube', name: 'Cube', drills: [cubeTable, cube16, cubeY, cubeDone, cubeNamed, cubeFree] }] };
+  return { sections: [{ id: 'proportion', name: 'Proportion', drills: [divisions, divide, ratio, clock, measure] }, { id: 'ellipse', name: 'Ellipse', drills: [ellFree, ellBox, ellTop, ellDeg] }, { id: 'cube', name: 'Cube', drills: [cubeTable, cube16, cubeY, cubeDone, cubeNamed, cubeFree] }] };
 })();

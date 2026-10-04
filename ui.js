@@ -44,7 +44,7 @@ import { DRILLS } from './drills.js';
     S.drill.draw(g, S.geo, C);
     const n = S.result ? S.gradedCount : S.strokes.length;
     // Sketch strokes go under the final ones so the answer stays readable on top of the drafting.
-    for (let i = 0; i < n; i++) if (S.strokes[i].sketch) drawStroke(S.strokes[i], C.sketch, SKETCH_W);
+    if (showSketch) for (let i = 0; i < n; i++) if (S.strokes[i].sketch) drawStroke(S.strokes[i], C.sketch, SKETCH_W);
     for (let i = 0; i < n; i++) if (!S.strokes[i].sketch) drawStroke(S.strokes[i], C.ink, FINAL_W);
     if (S.result && S.result.overlay) S.result.overlay(g, C);
     for (let i = n; i < S.strokes.length; i++) drawStroke(S.strokes[i], C.muted, FINAL_W); // tracing over the correction
@@ -58,6 +58,10 @@ import { DRILLS } from './drills.js';
      carrying sketch = true, so undo and erase treat both kinds alike. */
   const SKETCH_W = 0.9, FINAL_W = 1.8, ERASE_R = 12;
   let tool = 'final';
+  // Sketch lines can be hidden at any time, before or after Check, to see the answer on its own.
+  // They are only hidden, never removed; drawing a new sketch stroke shows them again.
+  let showSketch = true;
+  function setSketchShown(on) { showSketch = on; $('peek').setAttribute('aria-pressed', on); render(); }
   const finals = () => S.strokes.filter(st => !st.sketch);
   function setTool(t) { tool = t; for (const b of document.querySelectorAll('[data-tool]')) b.setAttribute('aria-pressed', b.dataset.tool === t); }
   // Distance from p to the stroke's polyline, so a fast stroke with sparse points is still hit.
@@ -97,7 +101,7 @@ import { DRILLS } from './drills.js';
   const end = (e, keep) => {
     if (ignored.delete(e.pointerId)) return;
     if (e.pointerId !== active) return;
-    if (keep && cur && cur.length && tool !== 'erase') { if (tool === 'sketch' && !S.result) cur.sketch = true; S.strokes.push(cur); }
+    if (keep && cur && cur.length && tool !== 'erase') { if (tool === 'sketch' && !S.result) { cur.sketch = true; if (!showSketch) setSketchShown(true); } S.strokes.push(cur); }
     cur = null; active = null; render(); buttons();
   };
   pad.addEventListener('pointerup', e => end(e, true));
@@ -126,6 +130,7 @@ import { DRILLS } from './drills.js';
     render(); renderPanel(); buttons();
   });
   for (const b of document.querySelectorAll('[data-tool]')) b.addEventListener('click', () => setTool(b.dataset.tool));
+  $('peek').addEventListener('click', () => setSketchShown(!showSketch));
   // Safari ignores user-scalable=no in a normal tab, so pinch zoom is also refused here: its own
   // gesture events, and any touch move with two fingers down.
   for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, e => e.preventDefault());

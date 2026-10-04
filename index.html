@@ -82,9 +82,21 @@ button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .pens button:first-child { border-radius: 10px 0 0 10px; margin-left: 0; }
 .pens button:last-child { border-radius: 0 10px 10px 0; }
 .pens button[aria-pressed="true"] { background: var(--chip-on); color: var(--chip-on-fg); border-color: var(--chip-on); }
-.pens .sw { display: inline-block; width: 16px; margin-right: 7px; vertical-align: middle; border-radius: 2px; background: var(--ink); height: 3px; }
-.pens [data-tool="sketch"] .sw { background: var(--sketch); height: 2px; }
-.pens [data-tool="final"][aria-pressed="true"] .sw { background: var(--chip-on-fg); }
+/* Icons are inline SVG drawn with the text colour, so they follow the theme and need no files. */
+.tools svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vertical-align: -5px; }
+.tools button svg + span { margin-left: 7px; }
+/* Clear wipes the whole sheet, so it is small and out at the far left; Undo is the one reached for. */
+.tools #clear { padding: 0 9px; min-height: 36px; align-self: center; color: var(--muted); }
+.tools #clear svg { width: 18px; height: 18px; vertical-align: -4px; }
+.tools #undo { padding: 0 20px; }
+.tools #undo svg { width: 26px; height: 26px; vertical-align: -7px; }
+.pens [data-tool="sketch"] svg { stroke: var(--sketch); stroke-width: 1.4; }
+.pens [data-tool="final"] svg { stroke-width: 3; }
+/* Sketch visibility: the eye carries the sketch colour; struck through and dimmed when the sketch is hidden. */
+.tools #peek { padding: 0 12px; color: var(--sketch); }
+.tools #peek .off { display: none; }
+.tools #peek[aria-pressed="false"] { color: var(--muted); }
+.tools #peek[aria-pressed="false"] .off { display: inline; }
 .tools .primary { background: var(--chip-on); color: var(--chip-on-fg); border-color: var(--chip-on); min-width: 112px; }
 
 .panel { min-height: 0; min-width: 0; overflow-y: auto; touch-action: pan-y; display: flex; flex-direction: column; gap: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
@@ -123,7 +135,7 @@ button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 }
 @media (max-width: 520px) {
   .brand { font-size: 20px; } .tabs button { padding: 8px 10px; font-size: 15px; } .tally { width: 100%; margin-left: 0; display: none; }
-  .task { font-size: 13px; } .tools { flex-wrap: wrap; } .tools button { padding: 0 13px; } .pens button { padding: 0 10px; } .tools .primary { min-width: 88px; }
+  .task { font-size: 13px; } .tools { flex-wrap: wrap; } .tools button { padding: 0 13px; } .pens button { padding: 0 10px; } .tools #undo { padding: 0 13px; } .tools .primary { min-width: 88px; }
 }
 </style>
 </head>
@@ -140,13 +152,14 @@ button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
       <canvas id="pad" aria-label="Drawing sheet"></canvas>
       <div class="top" id="top">
       <div class="tools">
-        <button id="undo" type="button">Undo</button>
-        <button id="clear" type="button">Clear</button>
+        <button id="clear" type="button" aria-label="Clear the sheet" title="Clear the sheet"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></button>
+        <button id="undo" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg><span>Undo</span></button>
         <span class="pens" role="group" aria-label="Pen">
-          <button type="button" data-tool="sketch" aria-pressed="false"><i class="sw"></i>Sketch</button>
-          <button type="button" data-tool="final" aria-pressed="true"><i class="sw"></i>Final</button>
-          <button type="button" data-tool="erase" aria-pressed="false">Eraser</button>
+          <button type="button" data-tool="sketch" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 15c3-8 6 6 9-2s6 4 9-4"/></svg><span>Sketch</span></button>
+          <button type="button" data-tool="final" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 15c3-8 6 6 9-2s6 4 9-4"/></svg><span>Final</span></button>
+          <button type="button" data-tool="erase" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 20h12"/><path d="M5.6 13.4 13.4 5.6a2 2 0 0 1 2.8 0l3.2 3.2a2 2 0 0 1 0 2.8L11 20H8l-2.4-2.4a3 3 0 0 1 0-4.2z"/><path d="m10 9 6 6"/></svg><span>Eraser</span></button>
         </span>
+        <button id="peek" type="button" aria-pressed="true" aria-label="Show or hide sketch lines" title="Show or hide sketch lines"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path class="off" d="M4 4l16 16"/></svg></button>
         <span class="gap"></span>
         <button id="again" type="button" hidden>Again</button>
         <button id="go" type="button" class="primary">Check</button>
