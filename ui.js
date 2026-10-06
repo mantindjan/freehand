@@ -30,7 +30,7 @@ import { DEFAULT_REPO, syncConfig, setSyncConfig, syncState, sync } from './sync
   // must never cost the boss his drawing. Any result is dropped, since it described the old prompt.
   function newPrompt(keep) {
     S.spec = S.drill.spec(optsOf(S.drill), S.spec, !!keep); if (!keep) S.strokes = []; S.result = null;
-    taskEl.textContent = S.drill.task(S.spec); layout(); render(); renderPanel(); buttons();
+    taskEl.textContent = S.drill.task(S.spec); layout(); render(); renderPanel(); buttons(); startAnimation();
   }
 
   function drawStroke(pts, color, w) {
@@ -40,10 +40,15 @@ import { DEFAULT_REPO, syncConfig, setSyncConfig, syncState, sync } from './sync
     for (let i = 1; i < pts.length - 1; i++) g.quadraticCurveTo(pts[i].x, pts[i].y, (pts[i].x + pts[i + 1].x) / 2, (pts[i].y + pts[i + 1].y) / 2);
     g.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y); g.stroke(); g.restore();
   }
+  // Animated sheets (the dividing techniques) are redrawn every frame while they are open. Time is
+  // counted from when the page loaded; the sheet turns it into its own loop.
+  const t0 = performance.now(); let animating = false;
+  function animate() { if (!S.drill || !S.drill.animated) { animating = false; return; } render(); requestAnimationFrame(animate); }
+  function startAnimation() { if (S.drill.animated && !animating) { animating = true; requestAnimationFrame(animate); } }
   function render() {
     g.clearRect(0, 0, S.W, S.H);
     if (!S.spec) return;
-    S.drill.draw(g, S.geo, C);
+    S.drill.draw(g, S.geo, C, (performance.now() - t0) / 1000);
     const n = S.result ? S.gradedCount : S.strokes.length;
     // Sketch strokes go under the final ones so the answer stays readable on top of the drafting.
     if (showSketch) for (let i = 0; i < n; i++) if (S.strokes[i].sketch) drawStroke(S.strokes[i], C.sketch, SKETCH_W);
@@ -213,7 +218,7 @@ import { DEFAULT_REPO, syncConfig, setSyncConfig, syncState, sync } from './sync
       if (r.rows.length) h += '<dl class="rows">' + r.rows.map(x => `<div class="row ${x.s || ''}"><span class="mark"></span><dt>${esc(x.k)}</dt><dd>${esc(x.v)}</dd></div>`).join('') + '</dl>';
       if (r.notes.length) h += '<ul class="notes">' + r.notes.map(n => `<li>${esc(n)}</li>`).join('') + '</ul>';
       h += '</section>';
-    } else h += `<section><h3>${d.reference ? 'About this sheet' : 'How it is marked'}</h3><p class="how">${esc(d.how)}</p></section>`;
+    } else h += `<section><h3>${d.reference ? 'About this sheet' : 'How it is marked'}</h3><p class="how">${esc(typeof d.how === 'function' ? d.how(S.spec) : d.how)}</p></section>`;
     if (d.opts.length) h += '<section><h3>Set-up</h3>' + d.opts.map(op => `<div class="opt"><span>${esc(op.label)}</span><div>` + op.choices.map(c => `<button type="button" data-k="${op.key}" data-v="${c[0]}" aria-pressed="${o[op.key] === c[0]}">${esc(c[1])}</button>`).join('') + '</div></div>').join('') + '</section>';
     const hist = (saved.hist[d.id] || []).slice(-10);
     if (!d.reference) h += '<section><h3>Last ten on this exercise</h3>' + (hist.length ? `<div class="hist"><div class="bars">${hist.map(s => `<i class="${tier(s)}" style="height:${Math.max(6, s)}%"></i>`).join('')}</div><b>avg ${Math.round(hist.reduce((a, b) => a + b, 0) / hist.length)}</b></div>` : '<p class="how">Nothing marked yet.</p>') + '</section>';
@@ -241,7 +246,7 @@ import { DEFAULT_REPO, syncConfig, setSyncConfig, syncState, sync } from './sync
     const kept = sheets[S.drill.id];
     if (!kept) { S.spec = null; return newPrompt(); }
     Object.assign(S, kept);
-    taskEl.textContent = S.drill.task(S.spec); layout(); render(); renderPanel(); buttons();
+    taskEl.textContent = S.drill.task(S.spec); layout(); render(); renderPanel(); buttons(); startAnimation();
   }
   $('tabs').addEventListener('click', e => { const b = e.target.closest('button[data-s]'); if (b) open(b.dataset.s); });
   $('drills').addEventListener('click', e => { const b = e.target.closest('button[data-d]'); if (b) open(S.sec.id, b.dataset.d); });

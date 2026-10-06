@@ -56,6 +56,89 @@ export const DRILLS = (function () {
     }
   };
 
+  /* Reference sheet: how to divide a line into thirds, fifths and sevenths by hand, shown as a looping
+     animation. Every method here leans on halving, the one split the eye does well.
+     - Fujimoto's approximation (from paper folding): guess the first part, then keep halving the
+       stretch between the newest mark and one end of the line, in a fixed right / left order. Each
+       halving halves the error of the guess, so a rough guess comes back several times closer.
+     - The middle piece: an odd split always has a piece sitting dead centre on the midpoint. */
+  const FUJI = { 3: 'RL', 5: 'RRLL', 7: 'RLL' }; // which end to halve towards, per step of one round
+  const GUESS_ERR = 0.045; // the animation's first guess is this far off, so the correction can be seen
+  // Steps of an animation: { key, at, span: [a, b] or null, text }. A mark with a key already used
+  // replaces the earlier one (a better placement of the same fraction).
+  function fujimotoSteps(n) {
+    const steps = [], ops = FUJI[n]; let v = 1 / n + GUESS_ERR, num = 1, err = 1;
+    steps.push({ key: 1, at: v, span: null, text: `Guess the first ${ORD[n]}. It can be off: this one is, on purpose.` });
+    const runs = ops + ops.slice(0, -1); // one full round, then round again as far as the other marks
+    for (let i = 0; i < runs.length; i++) {
+      const right = runs[i] === 'R', from = v;
+      v = right ? (v + 1) / 2 : v / 2; num = right ? (num + n) / 2 : num / 2; err *= 2;
+      const again = i >= ops.length, back = num === 1;
+      steps.push({ key: num, at: v, span: right ? [from, 1] : [0, from],
+        text: `Halve from that mark to the ${right ? 'right' : 'left'} end: ${num}/${n}` + (back ? `, the first ${ORD[n]} again, ${err} times closer than the guess.` : again ? `, now ${err} times closer.` : '.') + (back ? ' Go round once more from it.' : '') });
+    }
+    if (n === 7) for (const [k, a, b, how] of [[3, 2, 4, 'Halve between 2/7 and 4/7'], [5, 3, 7, 'Halve from 3/7 to the right end'], [6, 5, 7, 'Halve from 5/7 to the right end']]) {
+      const pos = q => q === 7 ? 1 : (steps.filter(s => s.key === q).pop() || {}).at;
+      steps.push({ key: k, at: (pos(a) + pos(b)) / 2, span: [pos(a), pos(b)], text: `${how}: ${k}/7.` });
+    }
+    return steps;
+  }
+  function middleSteps(n) {
+    const h = (n - 1) / 2, steps = [{ key: 'm', at: 0.5, span: [0, 1], text: 'Mark the middle of the line. Halving is the easy part.' }];
+    steps.push({ key: h, at: h / n, piece: [h / n, (h + 1) / n], span: null, text: `Draw a short piece centred on that mark: the middle ${ORD[n]}. Its two ends are ${h}/${n} and ${h + 1}/${n}.` });
+    steps.push({ key: h + 1, at: (h + 1) / n, span: null, quick: true, text: '' });
+    if (n === 3) steps.push({ key: 'c', at: null, span: null, text: 'Check: the piece and the two stretches left over should all be the same length. Adjust the piece until they are.' });
+    if (n === 5) for (const [k, a, b] of [[1, 0, 2], [4, 3, 5]]) steps.push({ key: k, at: k / n, span: [a / n, b / n], text: `Each stretch left over is two fifths: halve it. ${k}/5.` });
+    if (n === 7) for (const [k, side] of [[1, 'left'], [2, 'left'], [5, 'right'], [6, 'right']]) steps.push({ key: k, at: k / n, span: side === 'left' ? [0, 3 / 7] : [4 / 7, 1], word: 'in thirds', text: `Each stretch left over is three sevenths: split it in thirds. ${k}/7.` });
+    if (n > 3) steps.push({ key: 'c', at: null, span: null, text: `Check: every part should match the middle piece. If the outer parts are bigger, the piece was too small.` });
+    return steps;
+  }
+  const ORD = { 3: 'third', 5: 'fifth', 7: 'seventh' };
+  const STEP_S = 2.4; // seconds a step stays on screen
+  const techniques = {
+    id: 'techniques', name: 'Techniques', reference: true, animated: true,
+    how(s) {
+      return s.method === 'fuji'
+        ? `Fujimoto’s method, from paper folding. Guess the first ${ORD[s.n]}, then keep halving between your newest mark and one end of the line, in this order: ${FUJI[s.n].split('').map(c => c === 'R' ? 'right' : 'left').join(', ')}. That brings you back to the first ${ORD[s.n]}, ${2 ** FUJI[s.n].length} times closer than your guess, because every halving halves the error. Go round again and the error is gone. You never judge a ${ORD[s.n]} by eye, only halves. Draw on the sheet to try it; nothing is marked here.`
+        : `The middle piece. An odd split always has one part sitting dead centre. Find the middle, draw that centre part astride it, then deal with what is left on each side: ${s.n === 3 ? 'nothing more to do for thirds' : s.n === 5 ? 'two fifths, so halve it' : 'three sevenths, so split it in thirds'}. The check is built in: every part must match the middle piece. Sevenths also sit close to eighths: the first seventh is a sliver past 1/8, 2/7 a little past 1/4, 3/7 nearly half a step past 3/8 (see Divisions). Draw on the sheet to try it; nothing is marked here.`;
+    },
+    opts: [{ key: 'method', label: 'Method', def: 'fuji', choices: [['fuji', 'Fujimoto: halve and halve'], ['mid', 'The middle piece']] },
+      { key: 'n', label: 'Parts', def: '7', choices: [['3', 'Thirds'], ['5', 'Fifths'], ['7', 'Sevenths']] }],
+    spec(o) { return { method: o.method, n: +o.n }; },
+    lay(s, A) { return { A, n: s.n, steps: s.method === 'fuji' ? fujimotoSteps(s.n) : middleSteps(s.n) }; },
+    task(s) { return `${s.method === 'fuji' ? 'Fujimoto’s halving' : 'The middle piece'}: a line in ${s.n === 3 ? 'thirds' : s.n === 5 ? 'fifths' : 'sevenths'}. The steps loop; draw underneath to try them.`; },
+    // time is seconds since the page opened; the loop is the steps, then a pause on the finished line.
+    draw(g, G, C, time) {
+      const A = G.A, x0 = A.x0 + 30, L = A.w - 60, y = A.y0 + Math.min(150, A.h * 0.3), X = t => x0 + t * L;
+      const shown = G.steps.filter(s => !s.quick), total = shown.length + 1.5, now = ((time || 0) / STEP_S) % total, idx = Math.min(shown.length - 1, Math.floor(now)), k = now >= shown.length ? 1 : now - idx;
+      const text = (str, x, yy, color, size, align) => { g.save(); g.fillStyle = color; g.font = `${size >= 16 ? 600 : 500} ${size}px "Instrument Sans", system-ui, sans-serif`; g.textAlign = align || 'center'; g.textBaseline = 'middle'; g.fillText(str, x, yy); g.restore(); };
+      // the line, and faint ticks where the exact parts are, so the eye can see each mark close in
+      D.line(g, { x: X(0), y }, { x: X(1), y }, C.ink, 2.5); for (const t of [0, 1]) D.line(g, { x: X(t), y: y - 12 }, { x: X(t), y: y + 12 }, C.ink, 2.5);
+      for (let q = 1; q < G.n; q++) D.line(g, { x: X(q / G.n), y: y + 20 }, { x: X(q / G.n), y: y + 30 }, C.line, 2);
+      // marks placed by the steps so far; the newest placement of each fraction wins
+      const marks = new Map(), upto = G.steps.indexOf(shown[idx]);
+      for (let i = 0; i <= upto + (G.steps[upto + 1] && G.steps[upto + 1].quick ? 1 : 0); i++) { const s = G.steps[i]; if (s.at != null) marks.set(s.key, { s, fresh: i >= upto }); }
+      const cur = shown[idx];
+      if (cur.span) { // the stretch being halved: a bracket under the line that draws itself, then the mark drops on its middle
+        const a = X(cur.span[0]), b = X(cur.span[1]), yy = y + 46, p = Math.min(1, k * 2.2);
+        g.save(); g.strokeStyle = C.red; g.lineWidth = 2; g.beginPath(); g.moveTo(a, yy - 8); g.lineTo(a, yy); g.lineTo(a + (b - a) * p, yy); if (p >= 1) g.lineTo(b, yy - 8); g.stroke(); g.restore();
+        if (p >= 1) text(cur.word || 'half', (a + b) / 2, yy + 14, C.red, 13);
+      }
+      for (const [key, m] of marks) {
+        const appear = m.fresh ? Math.max(0, Math.min(1, (k - (cur.span ? 0.45 : 0)) * 3)) : 1; if (appear <= 0) continue;
+        const x = X(m.s.at), h = 16 * appear, color = key === 'm' ? C.muted : C.blue;
+        if (m.s.piece) { g.save(); g.globalAlpha = appear; D.line(g, { x: X(m.s.piece[0]), y }, { x: X(m.s.piece[1]), y }, C.blue, 6); g.restore(); }
+        D.line(g, { x, y: y - h }, { x, y: y + h }, color, key === 'm' ? 1.5 : 3);
+        if (key !== 'm' && appear >= 1) text(`${key}/${G.n}`, x, y - 30, C.muted, 14);
+      }
+      // step counter and caption
+      text(`Step ${idx + 1} of ${shown.length}`, x0, y + 92, C.muted, 13, 'left');
+      const words = cur.text.split(' '), lines = ['']; g.save(); g.font = '600 17px "Instrument Sans", system-ui, sans-serif';
+      for (const w of words) { const t = lines[lines.length - 1] + (lines[lines.length - 1] ? ' ' : '') + w; if (g.measureText(t).width > L) lines.push(w); else lines[lines.length - 1] = t; } g.restore();
+      lines.forEach((ln, i) => text(ln, x0, y + 118 + i * 24, C.ink, 17, 'left'));
+    }
+  };
+
   const divide = {
     id: 'divide', name: 'Divide a line', how: 'Marked on how far each mark sits from the true position, as a share of the line.',
     opts: [{ key: 'parts', label: 'Parts', def: 'r', choices: [['r', 'Random'], ['2', '2'], ['3', '3'], ['4', '4'], ['5', '5'], ['6', '6'], ['7', '7']] },
@@ -527,5 +610,5 @@ export const DRILLS = (function () {
     }
   };
 
-  return { sections: [{ id: 'proportion', name: 'Proportion', drills: [divisions, divide, ratio, clock, measure] }, { id: 'ellipse', name: 'Ellipse', drills: [ellFree, ellBox, ellTop, ellDeg] }, { id: 'cube', name: 'Cube', drills: [cubeTable, cube16, cubeY, cubeDone, cubeNamed, cubeFree] }] };
+  return { sections: [{ id: 'proportion', name: 'Proportion', drills: [divisions, techniques, divide, ratio, clock, measure] }, { id: 'ellipse', name: 'Ellipse', drills: [ellFree, ellBox, ellTop, ellDeg] }, { id: 'cube', name: 'Cube', drills: [cubeTable, cube16, cubeY, cubeDone, cubeNamed, cubeFree] }] };
 })();
