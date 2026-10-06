@@ -249,7 +249,8 @@ export const DRILLS = (function () {
   const cubeOpts = cubeOptsFor(TURNS), yOpts = cubeOptsFor(TURNS.slice(1));
   const viewOpt = { key: 'view', label: 'Seen from', def: 'above', choices: [['above', 'Above'], ['below', 'Below']] };
   const distOpt = { key: 'dist', label: 'Distance', def: 'avg', choices: [['far', 'Far'], ['avg', 'Average'], ['close', 'Close']] };
-  const KS = { far: 0.05, avg: 0.2, close: 0.5 }, DW = { far: 'far away (20 cube-lengths)', avg: 'at average distance (5 cube-lengths)', close: 'close (2 cube-lengths)' };
+  // Average is the sheet's distance, measured at about 4 cube-lengths (k = 0.25).
+  const KS = { far: 0.05, avg: 0.25, close: 0.5 }, DW = { far: 'far away (20 cube-lengths)', avg: 'at average distance (4 cube-lengths)', close: 'close (2 cube-lengths)' };
   const specFor = turns => o => {
     const dist = o.dist === 'r' ? pick(['far', 'avg', 'close']) : o.dist, cam = o.cam === 'r' ? pick(CAMS) : +o.cam;
     // A level camera is neither above nor below.
@@ -257,7 +258,8 @@ export const DRILLS = (function () {
     return { turn: o.turn === 'r' ? pick(turns) : +o.turn, cam, below, dist };
   };
   const cubeSpec = specFor(TURNS), ySpec = specFor(TURNS.slice(1));
-  const poseOf = s => FH.cubeModel(s.turn, s.below ? -s.cam : s.cam, KS[s.dist]);
+  // turn and cam are the sheet's names for a cube; the pose they stand for is the sheet's (FH.sheetCube).
+  const poseOf = s => FH.sheetCube(s.turn, s.cam, s.below, KS[s.dist]);
   const camText = s => s.cam ? `seen from ${s.cam}° ${s.below ? 'below' : 'above'}` : 'seen level';
   // The task line must fit on one line of the sheet, so it uses the short distance words.
   const DS = { far: 'far', avg: 'average distance', close: 'close' };
@@ -277,8 +279,8 @@ export const DRILLS = (function () {
     opts: [{ key: 'turn', label: 'Turn', def: 'r', choices: [['r', 'Random']].concat(TURNS.map(t => [String(t), turnLabel(t)])) },
       { key: 'cam', label: 'Camera', def: 'r', choices: [['r', 'Random']].concat(CAMS.slice(1).map(c => [String(c), camLabel(c)])) },
       { key: 'dist', label: 'Distance', def: 'avg', choices: distOpt.choices.concat([['r', 'Random']]) }],
-    spec(o) { return { turn: o.turn === 'r' ? pick(TURNS) : +o.turn, pitch: o.cam === 'r' ? pick(CAMS.slice(1)) : +o.cam, k: KS[o.dist === 'r' ? pick(['far', 'avg', 'close']) : o.dist] }; },
-    lay(s, A) { const m = FH.cubeModel(s.turn, s.pitch, s.k), P = cubePlace(m, A, 0.52); return { m, P }; },
+    spec(o) { return { turn: o.turn === 'r' ? pick(TURNS) : +o.turn, cam: o.cam === 'r' ? pick(CAMS.slice(1)) : +o.cam, k: KS[o.dist === 'r' ? pick(['far', 'avg', 'close']) : o.dist] }; },
+    lay(s, A) { const m = FH.sheetCube(s.turn, s.cam, false, s.k), P = cubePlace(m, A, 0.52); return { m, P }; },
     task() { return 'Draw the ellipse that sits in the top face and touches all four of its sides.'; },
     draw(g, G, C) { const tf = tfOf(G.P); for (const e of G.m.edges) if (e.visible) D.line(g, tf(G.m.V[e.a]), tf(G.m.V[e.b]), C.blue, 2); },
     grade(strokes, s, G) {
@@ -405,10 +407,13 @@ export const DRILLS = (function () {
     const segs = FH.segmentsOf(strokes); if (segs.length < Math.min(5, nVis)) return need(`Found ${segs.length} edges; draw at least the ${nVis} visible ones`);
     const a1 = FH.alignCube(m, segs, { hidden: false, maxRoll: 0, iters: 8, join: true }), a2 = segs.length > nVis ? FH.alignCube(m, segs, { hidden: true, maxRoll: 0, iters: 8, join: true }) : null;
     const al = a2 && a2.cost < a1.cost ? a2 : a1, rep = FH.edgeReport(al), miss = missOf(al), R = freeRead(segs, 12), rows = [];
-    if (R) { const b = R.best.model, dt = turnDiff(b.turn, s.turn), dp = Math.abs(b.pitch) - s.cam, dw = FH.distanceWords(b.k), face = s.below ? 'bottom' : 'top';
+    // The drawing is compared with the cube as the sheet draws it; where that differs from the cube's
+    // name (22.5 level is drawn at 26.5), the row says so.
+    const mp = Math.abs(m.pitch), askT = m.turn === s.turn ? `asked ${s.turn}°` : `the sheet draws its ${s.turn}° cube at ${m.turn}°`, askC = !s.cam ? 'asked level' : mp === s.cam ? `asked ${s.cam}°` : `the sheet draws its ${s.cam}° row at ${mp}°`;
+    if (R) { const b = R.best.model, dt = turnDiff(b.turn, m.turn), dp = Math.abs(b.pitch) - mp, dw = FH.distanceWords(b.k), face = s.below ? 'bottom' : 'top';
       if (s.cam > 0 && Math.abs(b.pitch) > 4 && (b.pitch < 0) !== s.below) rows.push({ k: 'View', v: `reads as seen from ${b.pitch < 0 ? 'below' : 'above'}, asked ${s.below ? 'below' : 'above'}`, s: 'bad' });
-      rows.push({ k: 'Turn', v: `drew ${b.turn.toFixed(0)}°, asked ${s.turn}°` + (Math.abs(dt) < 4 ? '' : dt > 0 ? ': left face too wide' : ': right face too wide'), s: st(dt, 5, 11) });
-      rows.push({ k: 'Camera', v: `drew ${Math.abs(b.pitch).toFixed(0)}°, asked ${s.cam ? s.cam + '°' : 'level'}` + (Math.abs(dp) < 4 ? '' : dp > 0 ? `: ${face} face too open` : `: ${face} face too flat`), s: st(dp, 5, 11) });
+      rows.push({ k: 'Turn', v: `drew ${b.turn.toFixed(0)}°, ${askT}` + (Math.abs(dt) < 4 ? '' : dt > 0 ? ': left face too wide' : ': right face too wide'), s: st(dt, 5, 11) });
+      rows.push({ k: 'Camera', v: `drew ${Math.abs(b.pitch).toFixed(0)}°, ${askC}` + (Math.abs(dp) < 4 ? '' : dp > 0 ? `: ${face} face too open` : `: ${face} face too flat`), s: st(dp, 5, 11) });
       rows.push({ k: 'Distance', v: `reads as ${dw.text}; asked ${DW[s.dist]}` }); }
     const checks = FH.familyChecks(rep.map(r => ({ edge: r.edge, ua: r.ua, ub: r.ub })), m), hc = hiddenCheck(rep, al.sc); if (hc) checks.push(hc);
     return { score: Math.round(score(miss / SCALE.cube) * al.pairs.length / al.E.length), title: R ? `You drew a cube ${viewText(R.best.model.turn, R.best.model.pitch)}` : 'Against the cube asked for',
@@ -459,10 +464,11 @@ export const DRILLS = (function () {
     },
     draw(g, G, C) {
       if (G.focus) { // one cube, as large as the sheet allows, with a small map of where it sits in the table
-        const A = G.A, cam = G.focus.cam, m3 = FH.cubeModel(G.focus.turn, G.below ? -cam : cam, G.k);
+        const A = G.A, cam = G.focus.cam, m3 = FH.sheetCube(G.focus.turn, cam, G.below, G.k);
         // Sized so the cube and its face-on companion together fill most of the sheet.
-        const b = FH.bbox(m3.V.concat(FH.cubeModel(0, m3.pitch, G.k).V)), sc = 0.88 * Math.min(A.w / (b.x1 - b.x0), A.h / (b.y1 - b.y0));
-        drawCell(g, m3, v => ({ x: A.cx + sc * (v.x - b.cx), y: A.cy + sc * (v.y - b.cy) }), C.blue, C.muted);
+        const b = FH.bbox(m3.V.concat(FH.cubeModel(0, m3.pitch, G.k).V)), top = 70; // room for the map and the cube's name, which the cube used to run into
+        const sc = 0.92 * Math.min(A.w / (b.x1 - b.x0), (A.h - top) / (b.y1 - b.y0));
+        drawCell(g, m3, v => ({ x: A.cx + sc * (v.x - b.cx), y: A.cy + top / 2 + sc * (v.y - b.cy) }), C.blue, C.muted);
         const m = 15, mx = A.x0, my = A.y0 + 4;
         CAMS.forEach((cm, r) => TURNS.forEach((t, c) => { const on = t === G.focus.turn && cm === cam; g.save(); g.fillStyle = on ? C.blue : C.line; g.fillRect(mx + c * m, my + r * m, m - 3, m - 3); g.restore(); }));
         g.save(); g.fillStyle = C.muted; g.font = '600 15px "Instrument Sans", system-ui, sans-serif'; g.textBaseline = 'middle';
@@ -473,7 +479,7 @@ export const DRILLS = (function () {
       CAMS.forEach((cam, r) => {
         D.label(g, cam ? cam + '°' : 'Level', G.x0 - 24, G.y0 + (r + 0.5) * G.cell, C.muted);
         TURNS.forEach((t, c) => { const cx = G.x0 + (c + 0.5) * G.cell, cy = G.y0 + (r + 0.5) * G.cell;
-          drawCell(g, FH.cubeModel(t, G.below ? -cam : cam, G.k), v => ({ x: cx + G.sc * v.x, y: cy + G.sc * v.y }), C.blue, C.muted); });
+          drawCell(g, FH.sheetCube(t, cam, G.below, G.k), v => ({ x: cx + G.sc * v.x, y: cy + G.sc * v.y }), C.blue, C.muted); });
       });
     }
   };

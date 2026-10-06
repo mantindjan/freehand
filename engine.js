@@ -186,6 +186,17 @@ export const FH = (function () {
     }
     return { V, edges, turn, pitch, k, nearH, faceVisible: vis, project: (i, j, h) => proj(toCam(...world(i, j, h))) };
   }
+  /* Krenz's sheet as he drew it. The cubes are named 22.5 / 45 / 67.5, but measured on the sheet
+     itself (tools/fit_krenz_sheet.py, docs/reference/krenz-sheet-measured.md) the camera rows sit
+     at about 26 and 64.5 degrees, and in the level row the turned cubes are at about 26.5 and 63.5,
+     which is what puts the back upright midway between the front and the far side upright. The
+     app shows and marks the cubes of the sheet, so the names map to these poses. */
+  const SHEET_PITCH = { 0: 0, 22.5: 26, 45: 45, 67.5: 64.5 }, SHEET_LEVEL_TURN = { 22.5: 26.5, 67.5: 63.5 };
+  function sheetPose(turn, cam) {
+    return { turn: cam === 0 && SHEET_LEVEL_TURN[turn] != null ? SHEET_LEVEL_TURN[turn] : turn, pitch: SHEET_PITCH[cam] != null ? SHEET_PITCH[cam] : cam };
+  }
+  // The cube the sheet calls (turn, cam), seen from above or below, at distance 1 / k.
+  function sheetCube(turn, cam, below, k) { const p = sheetPose(turn, cam); return cubeModel(p.turn, below ? -p.pitch : p.pitch, k); }
   function edgeName(e, nearH) {
     const near = e.h === nearH, tb = nearH ? ['top', 'bottom', 'floor'] : ['bottom', 'top', 'ceiling'];
     if (e.fam === 2) return !e.i && !e.j ? 'stem' : e.i && !e.j ? 'right side edge' : !e.i && e.j ? 'left side edge' : 'hidden upright';
@@ -378,7 +389,8 @@ export const FH = (function () {
   }
   function tableNames(turn, pitch) {
     const snap = (v, list) => list.reduce((a, b) => Math.abs(b - v) < Math.abs(a - v) ? b : a);
-    const t = snap(turn, [0, 22.5, 45, 67.5, 90]) % 90, p = snap(Math.abs(pitch), [0, 22.5, 45, 67.5]);
+    // rows are matched on the angles the sheet is drawn at, and reported under the sheet's names
+    const t = snap(turn, [0, 22.5, 45, 67.5, 90]) % 90, p = +Object.keys(SHEET_PITCH).find(c => SHEET_PITCH[c] === snap(Math.abs(pitch), Object.values(SHEET_PITCH)));
     let recipe = '';
     const ap = Math.abs(pitch);
     if (ap >= 8 && ap <= 50) recipe = (ap < 25 ? 'low' : 'high') + ', ' + (Math.abs(turn - 45) < 11.25 ? 'corner-on' : 'turned');
@@ -458,6 +470,6 @@ export const FH = (function () {
   const score = E => Math.round(100 / (1 + E * E));
 
   return { DEG, clamp, sub, dist, angDiff, clockDeg, clockText, pathLen, resample, bbox, fitLine, strokeLine, strokeSegments, mergeOverdrawn,
-    segmentsOf, hungarian, nelderMead, cubeModel, modelY, alignCube, fitCube, edgeReport, familyChecks, lineX, tableNames, distanceWords, fitY,
+    segmentsOf, hungarian, nelderMead, cubeModel, sheetPose, sheetCube, modelY, alignCube, fitCube, edgeReport, familyChecks, lineX, tableNames, distanceWords, fitY,
     ellipseDist, fitEllipse, faceEllipse, nearestFraction, score };
 })();
