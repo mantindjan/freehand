@@ -442,7 +442,7 @@ export const DRILLS = (function () {
   }
   const cubeTable = {
     id: 'cubetable', name: 'The table', reference: true,
-    how: 'Krenz’s 16 cubes: four turns across, four camera heights down. The thin cube in each cell is the face-on cube of that row, on the same centre. Tap a cube to see it large, tap again to come back. Nothing is marked here; draw over the sheet to trace it.',
+    how: 'Krenz’s 16 cubes: four turns across, four camera heights down. The thin cube in each cell is the face-on cube of that row, on the same centre. Touch a cube to open it large; there you can draw over it to trace, and All 16 brings you back. Nothing is marked here.',
     opts: [viewOpt, distOpt],
     // focus is the one cube shown large ({turn, cam}), or null for the whole table. A set-up change
     // (stay) keeps it, so the same cube can be compared from below or at another distance.
@@ -453,15 +453,17 @@ export const DRILLS = (function () {
     },
     task(s) {
       const view = `${s.below ? 'seen from below' : 'seen from above'}, ${DS[s.dist]}`;
-      return s.focus ? `Turn ${turnLabel(s.focus.turn)}, camera ${camLabel(s.focus.cam).toLowerCase()}, ${s.focus.cam ? view : DS[s.dist]}. Tap the sheet to go back to all 16.` : `The 16 cubes, ${view}. Tap a cube to see it large.`;
+      return s.focus ? `Turn ${turnLabel(s.focus.turn)}, camera ${camLabel(s.focus.cam).toLowerCase()}, ${s.focus.cam ? view : DS[s.dist]}. Draw over it to trace; All 16 goes back.` : `The 16 cubes, ${view}. Touch a cube to open it large.`;
     },
-    // A tap (not a stroke) on the table opens the cube under it; a tap on the large cube goes back.
-    // Returns the new prompt, or null when the tap hit nothing and should stay an ordinary dot.
-    tap(s, G, p) {
-      if (s.focus) return { ...s, focus: null };
+    // The table itself is a menu: touching a cube opens it large, and nothing can be drawn there.
+    // The large cube is a sheet to trace on; the "All 16" button goes back. Each has its own strokes.
+    canDraw(s) { return !!s.focus; },
+    touch(s, G, p) {
       const c = Math.floor((p.x - G.x0) / G.cell), r = Math.floor((p.y - G.y0) / G.cell);
       return c >= 0 && c < 4 && r >= 0 && r < 4 ? { ...s, focus: { turn: TURNS[c], cam: CAMS[r] } } : null;
     },
+    nav(s) { return s.focus ? { label: 'All 16', to: { ...s, focus: null } } : null; },
+    viewKey(s) { return s.focus ? `${s.focus.turn}/${s.focus.cam}` : 'all'; },
     draw(g, G, C) {
       if (G.focus) { // one cube, as large as the sheet allows, with a small map of where it sits in the table
         const A = G.A, cam = G.focus.cam, m3 = FH.sheetCube(G.focus.turn, cam, G.below, G.k);

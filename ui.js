@@ -90,6 +90,10 @@ import { DEFAULT_REPO, syncConfig, setSyncConfig, syncState, sync } from './sync
     if (e.pointerType === 'pen') penSeen = true;
     if ((penSeen && e.pointerType === 'touch') || e.button > 0) return;
     if (e.pointerType === 'touch' && Math.max(e.width || 0, e.height || 0) > 90) return; // palm-sized contact
+    // A sheet that is a menu, not a drawing (the table of 16 cubes): a touch picks what is under it
+    // and nothing is drawn. Whether a sheet draws or picks is the exercise's say (canDraw), never a
+    // guess from how far the pen moved.
+    if (S.drill.canDraw && !S.drill.canDraw(S.spec)) { const next = S.drill.touch(S.spec, S.geo, at(e)); if (next) go(next); e.preventDefault(); return; }
     if (active != null) { if (cur && FH.pathLen(cur) < 10) ignored.add(active); else return; } // the first contact never moved: it was the hand
     active = e.pointerId; cur = [at(e)]; if (tool === 'erase') eraseAt(cur[0]); try { pad.setPointerCapture(e.pointerId); } catch (err) { /* not capturable */ }
     e.preventDefault(); render();
@@ -103,18 +107,24 @@ import { DEFAULT_REPO, syncConfig, setSyncConfig, syncState, sync } from './sync
   const end = (e, keep) => {
     if (ignored.delete(e.pointerId)) return;
     if (e.pointerId !== active) return;
-    // Some sheets react to a tap (the table opens the cube under it). A tap is a contact that barely
-    // moved; it changes what is shown and leaves no mark. Strokes already on the sheet stay.
-    if (keep && cur && S.drill.tap && FH.pathLen(cur) < 8) {
-      const next = S.drill.tap(S.spec, S.geo, cur[0]);
-      if (next) { S.spec = next; taskEl.textContent = S.drill.task(S.spec); layout(); cur = null; active = null; render(); buttons(); return; }
-    }
     if (keep && cur && cur.length && tool !== 'erase') { if (tool === 'sketch' && !S.result) { cur.sketch = true; if (!showSketch) setSketchShown(true); } S.strokes.push(cur); }
     cur = null; active = null; render(); buttons();
   };
   pad.addEventListener('pointerup', e => end(e, true));
   pad.addEventListener('pointercancel', e => end(e, false));
   pad.addEventListener('contextmenu', e => e.preventDefault());
+
+  /* Views inside one exercise (the table and each of its cubes shown large). Each view keeps its own
+     strokes: tracing done on one cube is put aside when another view opens and is back when that
+     cube is opened again, so nothing is wiped and nothing litters the other views. */
+  const viewStrokes = {};
+  const viewKey = () => S.drill.id + ':' + (S.drill.viewKey ? S.drill.viewKey(S.spec) : '');
+  function go(spec) {
+    viewStrokes[viewKey()] = S.strokes;
+    S.spec = spec; S.strokes = viewStrokes[viewKey()] || []; S.result = null;
+    taskEl.textContent = S.drill.task(S.spec); layout(); render(); renderPanel(); buttons();
+  }
+  $('nav').addEventListener('click', () => { const n = S.drill.nav && S.drill.nav(S.spec); if (n) go(n.to); });
 
   function check() {
     if (!finals().length) return;
@@ -167,6 +177,10 @@ import { DEFAULT_REPO, syncConfig, setSyncConfig, syncState, sync } from './sync
     const done = !!S.result, go = $('go');
     go.textContent = done ? (S.drill.free ? 'New sheet' : 'Next') : 'Check'; go.disabled = !done && !finals().length;
     go.hidden = !!S.drill.reference; // a reference sheet is looked at and traced, never marked
+    // The way back out of a view (the table's "All 16"), and the drawing tools off where the sheet is a menu.
+    const n = S.drill.nav && S.drill.nav(S.spec), draws = !S.drill.canDraw || S.drill.canDraw(S.spec);
+    $('nav').hidden = !n; if (n) $('nav').textContent = n.label;
+    for (const b of document.querySelectorAll('[data-tool], #peek')) b.disabled = !draws;
     $('again').hidden = !done || !!S.drill.free; $('undo').disabled = !S.strokes.length; $('clear').disabled = !S.strokes.length && !done;
     $('tally').textContent = session.n ? `This sitting: ${session.n} checked, average ${Math.round(session.sum / session.n)}` : 'This sitting: nothing checked yet';
   }
