@@ -108,6 +108,10 @@ button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .tools #undo svg { width: 26px; height: 26px; vertical-align: -7px; }
 .pens [data-tool="sketch"] svg { stroke: var(--sketch); stroke-width: 1.4; }
 .pens [data-tool="final"] svg { stroke-width: 3; }
+/* Animation controls: back, pause or play, forward. The middle button shows what a press will do. */
+#player button { padding: 0 16px; }
+#player #play[aria-pressed="true"] { background: var(--panel); color: var(--fg); border-color: var(--line); }
+#player #play[aria-pressed="true"] .ico-play, #player #play[aria-pressed="false"] .ico-pause { display: none; }
 /* Sketch visibility: the eye carries the sketch colour; struck through and dimmed when the sketch is hidden. */
 .tools #peek { padding: 0 12px; color: var(--sketch); }
 .tools #peek .off { display: none; }
@@ -138,6 +142,7 @@ button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .row dd { grid-column: 2; margin: 0; }
 .row .mark { grid-row: 1 / span 2; width: 9px; height: 9px; margin-top: 5px; background: var(--line); border-radius: 50%; }
 .row.good .mark { background: var(--good); }
+.row.ok .mark { background: var(--blue); }
 .row.warn .mark { background: var(--warn); border-radius: 0; clip-path: polygon(50% 0, 100% 100%, 0 100%); }
 .row.bad .mark { background: var(--bad); border-radius: 1px; }
 .notes { margin: 10px 0 0; padding-left: 18px; color: var(--muted); font-size: 14px; }
@@ -180,6 +185,11 @@ button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
         </span>
         <button id="peek" type="button" aria-pressed="true" aria-label="Show or hide sketch lines" title="Show or hide sketch lines"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path class="off" d="M4 4l16 16"/></svg></button>
         <span class="gap"></span>
+        <span class="pens" id="player" role="group" aria-label="Animation" hidden>
+          <button id="prev" type="button" aria-label="Step back" title="Step back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+          <button id="play" type="button" aria-pressed="true" aria-label="Pause"><svg class="ico-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6v12M15 6v12"/></svg><svg class="ico-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z"/></svg></button>
+          <button id="next" type="button" aria-label="Step forward" title="Step forward"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+        </span>
         <button id="nav" type="button" class="primary" hidden></button>
         <button id="again" type="button" hidden>Again</button>
         <button id="go" type="button" class="primary">Check</button>

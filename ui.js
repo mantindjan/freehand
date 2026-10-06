@@ -29,6 +29,7 @@ import { DEFAULT_REPO, syncConfig, setSyncConfig, syncState, sync } from './sync
   // Only Clear, Again, Next and leaving the exercise wipe the sheet; a stray tap on an option
   // must never cost the boss his drawing. Any result is dropped, since it described the old prompt.
   function newPrompt(keep) {
+    sheetTime = 0; // an animated sheet starts again from its first step
     S.spec = S.drill.spec(optsOf(S.drill), S.spec, !!keep); if (!keep) S.strokes = []; S.result = null;
     taskEl.textContent = S.drill.task(S.spec); layout(); render(); renderPanel(); buttons(); startAnimation();
   }
@@ -42,13 +43,24 @@ import { DEFAULT_REPO, syncConfig, setSyncConfig, syncState, sync } from './sync
   }
   // Animated sheets (the dividing techniques) are redrawn every frame while they are open. Time is
   // counted from when the page loaded; the sheet turns it into its own loop.
-  const t0 = performance.now(); let animating = false;
-  function animate() { if (!S.drill || !S.drill.animated) { animating = false; return; } render(); requestAnimationFrame(animate); }
-  function startAnimation() { if (S.drill.animated && !animating) { animating = true; requestAnimationFrame(animate); } }
+  // The sheet has its own clock, sheetTime, which only runs while playing; pause, back and forward
+  // act on that clock, so the sheet itself needs to know nothing about them.
+  let animating = false, playing = true, sheetTime = 0, lastFrame = 0;
+  function animate(ts) {
+    if (!S.drill || !S.drill.animated) { animating = false; return; }
+    if (playing) sheetTime += Math.min(0.1, (ts - lastFrame) / 1000); // capped, so a tab left in the background does not jump ahead
+    lastFrame = ts; render(); requestAnimationFrame(animate);
+  }
+  function startAnimation() { if (S.drill.animated && !animating) { animating = true; lastFrame = performance.now(); requestAnimationFrame(animate); } }
+  // Back and forward stop the loop on a whole step, shown finished, so it can be studied and copied.
+  function stepBy(d) {
+    const tl = S.drill.timeline(S.geo), at = Math.min(tl.count - 1, Math.floor(sheetTime / tl.step) % Math.ceil(tl.count + 1.5));
+    playing = false; sheetTime = (((at + d) % tl.count + tl.count) % tl.count + 0.98) * tl.step; buttons();
+  }
   function render() {
     g.clearRect(0, 0, S.W, S.H);
     if (!S.spec) return;
-    S.drill.draw(g, S.geo, C, (performance.now() - t0) / 1000);
+    S.drill.draw(g, S.geo, C, sheetTime);
     const n = S.result ? S.gradedCount : S.strokes.length;
     // Sketch strokes go under the final ones so the answer stays readable on top of the drafting.
     if (showSketch) for (let i = 0; i < n; i++) if (S.strokes[i].sketch) drawStroke(S.strokes[i], C.sketch, SKETCH_W);
@@ -186,6 +198,7 @@ import { DEFAULT_REPO, syncConfig, setSyncConfig, syncState, sync } from './sync
     const n = S.drill.nav && S.drill.nav(S.spec), draws = !S.drill.canDraw || S.drill.canDraw(S.spec);
     $('nav').hidden = !n; if (n) $('nav').textContent = n.label;
     for (const b of document.querySelectorAll('[data-tool], #peek')) b.disabled = !draws;
+    $('player').hidden = !S.drill.animated; $('play').setAttribute('aria-pressed', playing); $('play').setAttribute('aria-label', playing ? 'Pause' : 'Play');
     $('again').hidden = !done || !!S.drill.free; $('undo').disabled = !S.strokes.length; $('clear').disabled = !S.strokes.length && !done;
     $('tally').textContent = session.n ? `This sitting: ${session.n} checked, average ${Math.round(session.sum / session.n)}` : 'This sitting: nothing checked yet';
   }
@@ -197,6 +210,9 @@ import { DEFAULT_REPO, syncConfig, setSyncConfig, syncState, sync } from './sync
     render(); renderPanel(); buttons();
   });
   for (const b of document.querySelectorAll('[data-tool]')) b.addEventListener('click', () => setTool(b.dataset.tool));
+  $('prev').addEventListener('click', () => stepBy(-1));
+  $('next').addEventListener('click', () => stepBy(1));
+  $('play').addEventListener('click', () => { playing = !playing; buttons(); });
   $('peek').addEventListener('click', () => setSketchShown(!showSketch));
   // Safari ignores user-scalable=no in a normal tab, so pinch zoom is also refused here: its own
   // gesture events, and any touch move with two fingers down.
@@ -271,5 +287,5 @@ import { DEFAULT_REPO, syncConfig, setSyncConfig, syncState, sync } from './sync
   // Offline start-up (sw.js). Without service worker support the page simply needs the network, as before.
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { /* e.g. private browsing: the page still works online */ });
   runSync(); // catch up on anything recorded while offline
-  window.__fh = { S, check, open, FH, setTool }; // handle for the page tests (modules have no globals to reach otherwise)
+  window.__fh = { S, check, open, FH, setTool, player: () => ({ playing, time: sheetTime }) }; // handle for the page tests (modules have no globals to reach otherwise)
 })();

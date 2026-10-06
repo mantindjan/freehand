@@ -14,6 +14,9 @@ export const DRILLS = (function () {
      scores (several errors averaged) are widened by MIX_EASE. */
   const SCALE = { divide: 0.05, ratio: 0.08, clock: 6, wobble: 0.04, ellTop: 0.07, cube: 0.10 };
   const ROW_EASE = 1.6, MIX_EASE = 1.5;
+  // Where an exercise measures one thing, its row carries the same verdict as the score's band, so a
+  // "Good" score never sits next to a warning triangle (seen on the iPad, 2026-10-06).
+  const rowOf = sc => sc >= 75 ? 'good' : sc >= 50 ? 'ok' : 'warn';
   const st = (v, good, warn) => Math.abs(v) <= good * ROW_EASE ? 'good' : Math.abs(v) <= warn * ROW_EASE ? 'warn' : 'bad';
   const sgn = v => (v >= 0 ? '+' : '−') + Math.abs(v);
   const longest = strokes => { let b = null; for (const s of strokes) { const l = FH.strokeLine(s); if (l && (!b || l.len > b.len)) b = l; } return b; };
@@ -94,7 +97,7 @@ export const DRILLS = (function () {
     return steps;
   }
   const ORD = { 3: 'third', 5: 'fifth', 7: 'seventh' };
-  const STEP_S = 2.4; // seconds a step stays on screen
+  const STEP_S = 4; // seconds a step stays on screen (2.4 was too fast to follow with a pen in hand)
   const techniques = {
     id: 'techniques', name: 'Techniques', reference: true, animated: true,
     how(s) {
@@ -106,8 +109,11 @@ export const DRILLS = (function () {
       { key: 'n', label: 'Parts', def: '7', choices: [['3', 'Thirds'], ['5', 'Fifths'], ['7', 'Sevenths']] }],
     spec(o) { return { method: o.method, n: +o.n }; },
     lay(s, A) { return { A, n: s.n, steps: s.method === 'fuji' ? fujimotoSteps(s.n) : middleSteps(s.n) }; },
-    task(s) { return `${s.method === 'fuji' ? 'Fujimoto’s halving' : 'The middle piece'}: a line in ${s.n === 3 ? 'thirds' : s.n === 5 ? 'fifths' : 'sevenths'}. The steps loop; draw underneath to try them.`; },
-    // time is seconds since the page opened; the loop is the steps, then a pause on the finished line.
+    task(s) { return `${s.method === 'fuji' ? 'Fujimoto’s halving' : 'The middle piece'}: a line in ${s.n === 3 ? 'thirds' : s.n === 5 ? 'fifths' : 'sevenths'}. Pause or step with the buttons; draw underneath to try it.`; },
+    // For the pause / back / forward buttons: how long a step lasts and how many there are.
+    timeline(G) { return { step: STEP_S, count: G.steps.filter(s => !s.quick).length }; },
+    // time is the sheet's own clock in seconds (it stops while paused); the loop is the steps, then a
+    // rest on the finished line.
     draw(g, G, C, time) {
       const A = G.A, x0 = A.x0 + 30, L = A.w - 60, y = A.y0 + Math.min(150, A.h * 0.3), X = t => x0 + t * L;
       const shown = G.steps.filter(s => !s.quick), total = shown.length + 1.5, now = ((time || 0) / STEP_S) % total, idx = Math.min(shown.length - 1, Math.floor(now)), k = now >= shown.length ? 1 : now - idx;
@@ -186,9 +192,13 @@ export const DRILLS = (function () {
       const l = longest(strokes); if (!l || l.len < 10) return need('No line found');
       const f = +s.f, r = l.len / G.L, e = r / f - 1, ux = (l.b.x - l.a.x) / l.len, uy = (l.b.y - l.a.y) / l.len;
       const end = { x: l.a.x + ux * G.L * f, y: l.a.y + uy * G.L * f };
-      return { score: score(e / SCALE.ratio), title: Math.abs(e) < 0.01 ? 'Right length' : `${pct(Math.abs(e), 0)} too ${e > 0 ? 'long' : 'short'}`,
+      // The miss is judged as a share of the asked length, but never of less than half the blue line.
+      // Judged purely against itself a short line is punished for the same slip of the pen: 12 px
+      // over on a third scored 51 while 15 px over on two thirds scored 75 (boss's sitting, 2026-10-06).
+      const sc = score((r - f) / Math.max(f, 0.5) / SCALE.ratio);
+      return { score: sc, title: Math.abs(e) < 0.01 ? 'Right length' : `${pct(Math.abs(e), 0)} too ${e > 0 ? 'long' : 'short'}`,
         sub: 'The red tick is where the line should end, measured from where you started.',
-        rows: [{ k: 'You drew', v: r.toFixed(2) + ' of the blue line', s: st(e, 0.03, 0.08) }, { k: 'Asked', v: f.toFixed(2) }], notes: [],
+        rows: [{ k: 'You drew', v: r.toFixed(2) + ' of the blue line', s: rowOf(sc) }, { k: 'Asked', v: f.toFixed(2) }], notes: [],
         overlay: (g, C) => { D.line(g, { x: l.a.x - uy * 10, y: l.a.y + ux * 10 }, { x: end.x - uy * 10, y: end.y + ux * 10 }, C.red, 2); D.line(g, { x: end.x - uy * 22, y: end.y + ux * 22 }, { x: end.x + uy * 22, y: end.y - ux * 22 }, C.red, 2); } };
     }
   };
@@ -207,9 +217,10 @@ export const DRILLS = (function () {
       const l = longest(strokes); if (!l || l.len < 15) return need('No line found');
       const from = dist(l.a, G.c) <= dist(l.b, G.c) ? l.a : l.b, to = from === l.a ? l.b : l.a;
       const deg = clockDeg(sub(to, from)), d = angDiff(deg, s.h * 30), T = s.h * 30 * DEG;
-      return { score: score(d / SCALE.clock), title: Math.abs(d) < 1 ? 'On target' : `${Math.abs(d).toFixed(0)}° ${d > 0 ? 'clockwise' : 'anticlockwise'} of target`,
+      const sc = score(d / SCALE.clock);
+      return { score: sc, title: Math.abs(d) < 1 ? 'On target' : `${Math.abs(d).toFixed(0)}° ${d > 0 ? 'clockwise' : 'anticlockwise'} of target`,
         sub: `You drew ${clockText(deg)}. The red line is ${clockText(s.h * 30)}.`,
-        rows: [{ k: 'You drew', v: clockText(deg), s: st(d, 2.5, 6) }, { k: 'Asked', v: clockText(s.h * 30) }], notes: [],
+        rows: [{ k: 'You drew', v: clockText(deg), s: rowOf(sc) }, { k: 'Asked', v: clockText(s.h * 30) }], notes: [],
         overlay: (g, C) => { const R = Math.max(l.len, 60);
           for (let i = 0; i < 12; i++) { const a = i * 30 * DEG, p = { x: G.c.x + Math.sin(a) * G.R, y: G.c.y - Math.cos(a) * G.R }, q = { x: G.c.x + Math.sin(a) * (G.R - (i % 3 ? 8 : 16)), y: G.c.y - Math.cos(a) * (G.R - (i % 3 ? 8 : 16)) }; D.line(g, p, q, C.muted, 1.5); }
           D.line(g, G.c, { x: G.c.x + Math.sin(T) * R, y: G.c.y - Math.cos(T) * R }, C.red, 2); } };
