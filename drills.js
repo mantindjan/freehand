@@ -179,7 +179,7 @@ export const DRILLS = (function () {
   };
 
   const ratio = {
-    id: 'ratio', name: 'Scale a length', how: 'Marked on the length of your line against the blue one.',
+    id: 'ratio', name: 'Scale a length', how: 'Marked on the length of your line against the blue one. After Check the blue line is laid along yours, dashed, with the right length marked on it.',
     opts: [{ key: 'frac', label: 'Length', def: 'r', choices: [['r', 'Random'], ['0.5', '1/2'], ['0.333', '1/3'], ['0.667', '2/3'], ['0.75', '3/4'], ['0.4', '0.4'], ['0.7', '0.7'], ['0.9', '0.9'], ['1', 'Same']] }],
     spec(o) { return { f: o.frac === 'r' ? pick(['0.5', '0.333', '0.667', '0.75', '0.4', '0.7', '0.9', '1']) : o.frac, ang: pick([0, 90, 30, -30, 60, -60]), len: rand(0.75, 1) }; },
     lay(s, A) {
@@ -197,9 +197,18 @@ export const DRILLS = (function () {
       // over on a third scored 51 while 15 px over on two thirds scored 75 (boss's sitting, 2026-10-06).
       const sc = score((r - f) / Math.max(f, 0.5) / SCALE.ratio);
       return { score: sc, title: Math.abs(e) < 0.01 ? 'Right length' : `${pct(Math.abs(e), 0)} too ${e > 0 ? 'long' : 'short'}`,
-        sub: 'The red tick is where the line should end, measured from where you started.',
+        sub: 'The dashed blue line is the blue one laid along yours, so the two can be compared in the same direction. The red tick is where your line should end.',
         rows: [{ k: 'You drew', v: r.toFixed(2) + ' of the blue line', s: rowOf(sc) }, { k: 'Asked', v: f.toFixed(2) }], notes: [],
-        overlay: (g, C) => { D.line(g, { x: l.a.x - uy * 10, y: l.a.y + ux * 10 }, { x: end.x - uy * 10, y: end.y + ux * 10 }, C.red, 2); D.line(g, { x: end.x - uy * 22, y: end.y + ux * 22 }, { x: end.x + uy * 22, y: end.y - ux * 22 }, C.red, 2); } };
+        // Beside the stroke, from where it starts: the right length in red, and beyond it a ghost of the
+        // whole reference line turned to the stroke's direction. A line looks longer upright than level,
+        // so the answer could look wrong next to a reference lying the other way; side by side it cannot.
+        overlay: (g, C) => {
+          const off = d => p => ({ x: p.x - uy * d, y: p.y + ux * d }), full = { x: l.a.x + ux * G.L, y: l.a.y + uy * G.L };
+          const ga = off(26)(l.a), gb = off(26)(full);
+          D.line(g, ga, gb, C.blue, 1.5, [7, 5]); D.cap(g, ga, gb, 7, C.blue); D.cap(g, gb, ga, 7, C.blue);
+          D.line(g, off(10)(l.a), off(10)(end), C.red, 2);
+          D.line(g, off(36)(end), off(-22)(end), C.red, 2); // the tick crosses your line, the red one and the ghost
+        } };
     }
   };
 
